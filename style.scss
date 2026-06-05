@@ -123,6 +123,210 @@ window.Bar {
       background: #4a4a4a;
     }
   }
+
+  WallpaperButton {
+    border-radius: 8px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0 6px;
+    background: transparent;
+
+    WallpaperButtonIcon {
+      -gtk-icon-size: 16px;
+    }
+  }
+
+  WallpaperButton:hover {
+    background: #2a2a2a;
+  }
+
+  WallpaperButton.pressed {
+    background: $accent-color;
+  }
+}
+
+window.WallpaperBackground {
+  background: $bg-color;
+
+  WallpaperBackgroundPicture {
+    background: $bg-color;
+  }
+}
+
+window.WallpaperMenuLayer {
+  background: transparent;
+  color: $text-active-color;
+
+  // 高さ(560px)を固定し、open/close を実寸で対称にする(ClockMenu と同様)
+  WallpaperMenu {
+    background: $bg-color;
+    border-radius: 10px;
+    min-width: 560px;
+    min-height: 560px;
+    transform: translateY(-560px);
+  }
+
+  WallpaperMenu.open {
+    transform: translateY(-16px);
+    transition: transform 500ms cubic-bezier(0.1, 0.9, 0.2, 1);
+  }
+
+  WallpaperMenu.close {
+    transform: translateY(-560px);
+    transition: transform 500ms cubic-bezier(0.1, 0.9, 0.2, 1);
+  }
+
+  FirstPadding {
+    min-height: 10px;
+  }
+
+  // 上の島: ディレクトリ
+  WallpaperDirIsland {
+    background: $bg-up-color;
+    border-radius: 10px;
+    margin: 10px 10px 0 10px;
+    padding: 10px 12px;
+
+    WallpaperDirInfo {
+      WallpaperDirCaption {
+        color: $text-inactive-color;
+        font-size: 11px;
+      }
+
+      WallpaperDirPath {
+        color: $text-active-color;
+        font-size: 13px;
+        font-family: monospace;
+        margin-top: 2px;
+      }
+    }
+
+    WallpaperDirButton {
+      background: #4a4a4a;
+      color: $text-active-color;
+      border-radius: 6px;
+      padding: 6px 12px;
+      min-height: 0;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+
+    WallpaperDirButton:hover {
+      background: #5a5a5a;
+    }
+  }
+
+  // 中央の島: サムネ一覧
+  WallpaperGridScroll {
+    background: $bg-up-color;
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px;
+
+    WallpaperGrid {
+      background: transparent;
+
+      WallpaperThumbnail {
+        background: transparent;
+        border-radius: 8px;
+        padding: 3px;
+        min-height: 0;
+
+        WallpaperThumbnailImage {
+          background: #3a3a3a;
+          border-radius: 6px;
+        }
+      }
+
+      WallpaperThumbnail:hover {
+        background: #525252;
+      }
+
+      WallpaperThumbnail.selected {
+        background: $accent-color;
+      }
+    }
+
+    // スクロールバー(StartMenu と同じ)
+    scrollbar {
+      background: transparent;
+      margin: 2px;
+
+      trough {
+        background: transparent;
+        border-radius: 8px;
+        min-width: 6px;
+      }
+
+      slider {
+        background: #5a5a5a;
+        border-radius: 8px;
+        min-width: 6px;
+        min-height: 30px;
+        transition: background 150ms ease;
+      }
+
+      slider:hover {
+        background: #7a7a7a;
+      }
+
+      slider:active {
+        background: $accent-color;
+      }
+    }
+
+    scrollbar.overlay-indicator:not(.hovering) slider {
+      background: #5a5a5a;
+      min-width: 4px;
+    }
+  }
+
+  // 下の島: 適用範囲 + override 解除
+  WallpaperControlIsland {
+    background: $bg-up-color;
+    border-radius: 10px;
+    margin: 0 10px 10px 10px;
+    padding: 10px;
+
+    WallpaperModeToggle {
+      WallpaperModeButton {
+        background: #3a3a3a;
+        color: $text-active-color;
+        border-radius: 6px;
+        padding: 6px 12px;
+        margin-right: 6px;
+        min-height: 0;
+        font-size: 12px;
+      }
+
+      WallpaperModeButton:hover {
+        background: #525252;
+      }
+
+      WallpaperModeButton.active {
+        background: $accent-color;
+        color: $bg-color;
+      }
+    }
+
+    WallpaperClearButton {
+      background: #3a3a3a;
+      color: $text-active-color;
+      border-radius: 6px;
+      padding: 6px 12px;
+      min-height: 0;
+      font-size: 12px;
+    }
+
+    WallpaperClearButton:hover {
+      background: #525252;
+    }
+
+    WallpaperClearButton:disabled {
+      background: transparent;
+      color: rgba(245, 245, 245, 0.3);
+    }
+  }
 }
 
 window.StartMenuLayer {
