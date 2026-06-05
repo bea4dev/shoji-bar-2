@@ -1,8 +1,17 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
-import { Accessor, createState } from "gnim"
+import {
+  Accessor,
+  For,
+  createState,
+  createComputed,
+  createEffect,
+  onCleanup,
+} from "gnim"
 import { LayerState } from "../utils/LayerState"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
+import Pango from "gi://Pango"
+import AstalApps from "gi://AstalApps"
 
 type StartMenuState = {
   isOpen: Accessor<boolean>
@@ -10,6 +19,8 @@ type StartMenuState = {
 }
 
 const LAYER_STATE = new LayerState<StartMenuState>()
+
+const apps = new AstalApps.Apps()
 
 export function StartMenuButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   return (
@@ -31,6 +42,20 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const [isOpen, setIsOpen] = createState(false)
   const [mounted, setMounted] = createState(false)
 
+  // 検索文字列と選択中インデックス
+  const [search, setSearch] = createState("")
+  const [selectedIndex, setSelectedIndex] = createState(0)
+
+  // 検索文字列に応じてアプリ一覧をリアルタイムに導出
+  const results = createComputed(() => apps.fuzzy_query(search()))
+
+  let entryRef: Gtk.Entry | null = null
+  let scrolledRef: Gtk.ScrolledWindow | null = null
+  let listRef: Gtk.Box | null = null
+
+  // 選択行 -> ウィジェット の対応。自動スクロールに使う
+  const rowMap = new Map<AstalApps.Application, Gtk.Widget>()
+
   let closeTimeoutId: number | null = null
   let openIdleId: number | null = null
 
@@ -50,6 +75,9 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     clearTimers()
 
     if (open) {
+      // 開くたびに検索状態をリセット
+      setSearch("")
+      setSelectedIndex(0)
       setMounted(true)
 
       // mounted=true の反映後に open class を付ける
@@ -57,6 +85,13 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       openIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         openIdleId = null
         setIsOpen(true)
+
+        // 検索欄をクリアして即入力できるようフォーカスする
+        if (entryRef !== null) {
+          entryRef.set_text("")
+          entryRef.grab_focus()
+        }
+
         return GLib.SOURCE_REMOVE
       })
     } else {
@@ -83,6 +118,64 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   LAYER_STATE.set(gdkmonitor, states)
 
+  // 選択中のアプリを起動してメニューを閉じる
+  function launchSelected() {
+    const list = results()
+    const target = list[selectedIndex()]
+
+    if (target) {
+      target.launch()
+      setOpen(false)
+    }
+  }
+
+  // 選択行をスクロール範囲内に収める
+  function scrollSelectedIntoView() {
+    const list = results()
+    const target = list[selectedIndex()]
+
+    if (!target || scrolledRef === null || listRef === null) {
+      return
+    }
+
+    const widget = rowMap.get(target)
+    if (!widget) {
+      return
+    }
+
+    const adjustment = scrolledRef.get_vadjustment()
+    if (!adjustment) {
+      return
+    }
+
+    const [ok, bounds] = widget.compute_bounds(listRef)
+    if (!ok) {
+      return
+    }
+
+    const top = bounds.get_y()
+    const bottom = top + bounds.get_height()
+    const viewTop = adjustment.get_value()
+    const viewBottom = viewTop + adjustment.get_page_size()
+
+    if (top < viewTop) {
+      adjustment.set_value(top)
+    } else if (bottom > viewBottom) {
+      adjustment.set_value(bottom - adjustment.get_page_size())
+    }
+  }
+
+  // 選択が変わったらレイアウト確定後にスクロール
+  createEffect(() => {
+    selectedIndex()
+    results()
+
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      scrollSelectedIntoView()
+      return GLib.SOURCE_REMOVE
+    })
+  })
+
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
 
   const inner = (
@@ -96,14 +189,16 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         orientation={Gtk.Orientation.VERTICAL}
         halign={Gtk.Align.FILL}
         hexpand
+        vexpand
       >
         <box cssName={"FirstPadding"} />
         <box
           cssName={"SearchBox"}
           orientation={Gtk.Orientation.VERTICAL}
-          valign={Gtk.Align.START}
+          valign={Gtk.Align.FILL}
           halign={Gtk.Align.FILL}
           hexpand
+          vexpand
         >
           <box
             cssName={"SearchBoxInner"}
@@ -116,17 +211,83 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
               file={`${SRC}/assets/search.svg`}
             />
             <entry
+              $={(self) => (entryRef = self)}
               cssName={"SearchBoxEntry"}
               placeholderText={" Search..."}
               halign={Gtk.Align.FILL}
               hexpand
+              onNotifyText={(self) => {
+                setSearch(self.text)
+                setSelectedIndex(0)
+              }}
+              onActivate={() => launchSelected()}
             />
           </box>
           <Gtk.Separator
             cssName={"SearchBoxSeparator"}
             orientation={Gtk.Orientation.HORIZONTAL}
           />
-          <label label={"App list here"} />
+          <scrolledwindow
+            $={(self) => (scrolledRef = self)}
+            cssName={"AppList"}
+            hexpand
+            vexpand
+            hscrollbarPolicy={Gtk.PolicyType.NEVER}
+            vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+          >
+            <box
+              $={(self) => (listRef = self)}
+              cssName={"AppListInner"}
+              orientation={Gtk.Orientation.VERTICAL}
+              halign={Gtk.Align.FILL}
+              valign={Gtk.Align.START}
+              hexpand
+            >
+              <For each={results}>
+                {(application: AstalApps.Application, index: Accessor<number>) => {
+                  const row = (
+                    <button
+                      cssName={"AppButton"}
+                      class={createComputed(() =>
+                        selectedIndex() === index() ? "selected" : "",
+                      )}
+                      canFocus={false}
+                      onClicked={() => {
+                        application.launch()
+                        setOpen(false)
+                      }}
+                    >
+                      <box
+                        cssName={"AppButtonInner"}
+                        orientation={Gtk.Orientation.HORIZONTAL}
+                        halign={Gtk.Align.FILL}
+                        hexpand
+                      >
+                        <image
+                          cssName={"AppButtonIcon"}
+                          iconName={
+                            application.iconName || "application-x-executable"
+                          }
+                          pixelSize={28}
+                        />
+                        <label
+                          cssName={"AppButtonLabel"}
+                          label={application.name}
+                          halign={Gtk.Align.START}
+                          ellipsize={Pango.EllipsizeMode.END}
+                        />
+                      </box>
+                    </button>
+                  ) as Gtk.Widget
+
+                  rowMap.set(application, row)
+                  onCleanup(() => rowMap.delete(application))
+
+                  return row
+                }}
+              </For>
+            </box>
+          </scrolledwindow>
         </box>
       </box>
     </box>
@@ -139,6 +300,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       gdkmonitor={gdkmonitor}
       layer={Astal.Layer.OVERLAY}
       exclusivity={Astal.Exclusivity.NORMAL}
+      keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
       application={app}
       visible={mounted}
@@ -157,6 +319,38 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   })
 
   window.add_controller(outsideClick)
+
+  // ↑↓ で選択移動 / Enter で起動 / Esc で閉じる
+  const keyController = Gtk.EventControllerKey.new()
+  keyController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+  keyController.connect("key-pressed", (_c, keyval) => {
+    const length = results().length
+
+    switch (keyval) {
+      case Gdk.KEY_Down:
+        if (length > 0) {
+          setSelectedIndex(Math.min(selectedIndex() + 1, length - 1))
+        }
+        return true
+      case Gdk.KEY_Up:
+        if (length > 0) {
+          setSelectedIndex(Math.max(selectedIndex() - 1, 0))
+        }
+        return true
+      case Gdk.KEY_Return:
+      case Gdk.KEY_KP_Enter:
+        launchSelected()
+        return true
+      case Gdk.KEY_Escape:
+        states.setOpen(false)
+        return true
+      default:
+        return false
+    }
+  })
+
+  window.add_controller(keyController)
 
   return window
 }
