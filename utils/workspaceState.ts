@@ -2,11 +2,20 @@ import { createState } from "gnim"
 import { connectShojiIpc, type ShojiIpcClient } from "./shojiIpc"
 
 // ShojiWM の workspaces.* IPC が返すビュー(protocol と一致させる)
+export type WsWindow = {
+  id: string
+  appId?: string
+  title: string
+  focused: boolean
+  /** epoch ms — most recent focus time. 0 = never focused. */
+  lastFocusedAt: number
+}
 export type WsWorkspace = {
   index: number
   windowCount: number
   isTiled: boolean
   active: boolean
+  windows: WsWindow[]
 }
 export type WsMonitor = { name: string; active: number; workspaces: WsWorkspace[] }
 export type WsView = { currentMonitor: string; monitors: WsMonitor[] }
@@ -16,10 +25,23 @@ export type WsView = { currentMonitor: string; monitors: WsMonitor[] }
 const [view, setView] = createState<WsView | null>(null)
 export { view }
 
+// dock.proximity の状態を connector ごとに保持。Dock は自モニタのフラグだけ見る。
+const [dockProximity, setDockProximity] = createState<Record<string, boolean>>({})
+export { dockProximity }
+
 export const ipc: ShojiIpcClient = connectShojiIpc(
   (message) => {
-    if ("event" in message && message.event === "workspaces.changed") {
-      setView(message.payload as WsView)
+    if ("event" in message) {
+      if (message.event === "workspaces.changed") {
+        setView(message.payload as WsView)
+      } else if (message.event === "dock.proximity") {
+        const payload = message.payload as { monitor: string; inside: boolean }
+        const current = dockProximity()
+        if (current[payload.monitor] === payload.inside) {
+          return
+        }
+        setDockProximity({ ...current, [payload.monitor]: payload.inside })
+      }
     } else if ("result" in message && message.result) {
       setView(message.result as WsView)
     }

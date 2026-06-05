@@ -5,6 +5,7 @@ import { createBinding, For, This } from "gnim"
 import { StartMenuLayer } from "./widget/StartMenu"
 import { ClockMenuLayer } from "./widget/ClockMenu"
 import { WallpaperBackground, WallpaperLayer } from "./widget/Wallpaper"
+import { DockWindow } from "./widget/Dock"
 
 app.start({
   css: style,
@@ -20,6 +21,7 @@ app.start({
             <ClockMenuLayer gdkmonitor={monitor} />
             <WallpaperLayer gdkmonitor={monitor} />
             <Bar gdkmonitor={monitor} />
+            <DockWindow gdkmonitor={monitor} />
           </This>
         )}
       </For>
