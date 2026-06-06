@@ -336,18 +336,14 @@ window.DockLayer {
   background: transparent;
   color: $text-active-color;
 
-  DockOuter {
-    margin: 0;
-    padding: 0;
-  }
-
   // 画面下に貼り付くドック本体
+  // 画面下からの 12px の隙間は marginBottom (layer-shell margin) で取っている。
+  // CSS で margin を付けると surface 内の透明領域になりクリックを吸ってしまう。
   DockBar {
     background: $bg-color;
     border-radius: 11px;
     border: 1px solid rgba(255, 255, 255, 0.05);
     padding: 2px 2px;
-    margin: 0 0 10px 0;
 
     // 初期/閉じ状態 (下に潜って見えない)
     transform: translateY(120px);

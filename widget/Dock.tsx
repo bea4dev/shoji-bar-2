@@ -28,7 +28,7 @@ const DOCK_ANIMATION_MS = 320
 // =============================================================================
 export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const connector = gdkmonitor.get_connector()
-  const { BOTTOM, LEFT, RIGHT } = Astal.WindowAnchor
+  const { BOTTOM } = Astal.WindowAnchor
 
   const [mounted, setMounted] = createState(false)
   const [isOpen, setIsOpen] = createState(false)
@@ -156,21 +156,24 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       gdkmonitor={gdkmonitor}
       layer={Astal.Layer.TOP}
       exclusivity={Astal.Exclusivity.NORMAL}
-      anchor={BOTTOM | LEFT | RIGHT}
+      // BOTTOM-only: surface is sized to DockBar's natural width and centered
+      // horizontally by layer-shell. Anchoring LEFT|RIGHT as well would make
+      // the surface span the full screen width and absorb clicks on the empty
+      // sides, blocking the windows underneath.
+      anchor={BOTTOM}
+      // 12px gap is layer-shell margin (outside the surface) so the dock
+      // surface itself does not extend below the visible bar — otherwise the
+      // bottom 12 px would absorb clicks that should reach the window below.
+      marginBottom={12}
       application={app}
       visible={mounted}
     >
       <box
-        cssName="DockOuter"
-        halign={Gtk.Align.CENTER}
-        valign={Gtk.Align.END}
-      >
-        <box
-          cssName="DockBar"
-          class={isOpen((open) => (open ? "open" : "close"))}
-          orientation={Gtk.Orientation.HORIZONTAL}
-          spacing={4}
-          $={(self) => {
+        cssName="DockBar"
+        class={isOpen((open) => (open ? "open" : "close"))}
+        orientation={Gtk.Orientation.HORIZONTAL}
+        spacing={4}
+        $={(self) => {
             // DockItem ボタンを reactive に詰める。
             // gnim の jsx は subscribe コールバック中だと tracking context が無いので、
             // createRoot でラップして毎回スコープを作り直す(Wallpaper と同じパターン)。
@@ -210,7 +213,6 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             dockConfig.subscribe(rebuild)
           }}
         />
-      </box>
     </window>
   )
 }
