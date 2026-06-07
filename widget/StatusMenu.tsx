@@ -358,6 +358,9 @@ function Submenu(activeSubmenu: Accessor<Submenu>): Gtk.Widget {
       cssName="SubmenuScroll"
       hscrollbarPolicy={Gtk.PolicyType.NEVER}
       vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
+      // overlay にすると scrollbar が内容に被って hover 干渉する。
+      // false にして scrollbar に専用の列を割り当てる。
+      overlayScrolling={false}
       heightRequest={200}
     >
       <box
@@ -955,40 +958,184 @@ function notificationsSubmenu(): Gtk.Widget {
   const list = (
     <box cssName="SubmenuList" orientation={Gtk.Orientation.VERTICAL} spacing={2} />
   ) as Gtk.Box
-  let dispose: (() => void) | null = null
-  const rebuild = () => {
-    if (dispose) {
-      dispose()
-      dispose = null
+
+  // Gtk.Revealer でラップして高さ折りたたみ、CSS で translateX + opacity を
+  // 担当させる。両者を並列に走らせると Revealer の SLIDE_DOWN が支配的に
+  // なって CSS transition が見えなくなるので、**順序を逐次化**する:
+  //   enter: Revealer 展開 → 完了後に entering クラス除去 (CSS slide-in)
+  //   leave: leaving クラス追加 (CSS slide-out) → 完了後に Revealer 折りたたみ
+  //          → 完了後に DOM 削除
+  //
+  // 動作中の状態変化に強くするため id ごとに token を発行し、各非同期 step
+  // は実行直前に「自分の token がまだ最新か」を確認してから進める。新しい
+  // 動作 (例: enter 中に dismiss) で token が更新されると古い callback は
+  // 単に no-op する。
+  const NOTIF_ANIM_MS = 240
+  const revealerById = new Map<number, Gtk.Revealer>()
+  const animTokenById = new Map<number, number>()
+  // 各 revealer (= notif row JSX) 専用の reactive scope の dispose。
+  // JSX 構築中に onClicked などが内部で onCleanup を呼ぶため、createRoot で
+  // tracking context を張る必要がある (reconcile は subscribe callback 経由
+  // で呼ばれるので、ここの外側には active な scope が無い)。
+  const disposeById = new Map<number, () => void>()
+  let tokenCounter = 0
+  let emptyLabel: Gtk.Widget | null = null
+
+  function bumpToken(id: number): number {
+    tokenCounter += 1
+    animTokenById.set(id, tokenCounter)
+    return tokenCounter
+  }
+  function tokenValid(id: number, token: number): boolean {
+    return animTokenById.get(id) === token
+  }
+
+  function createEmptyLabel(): Gtk.Widget {
+    return (
+      <label
+        cssName="SubmenuEmpty"
+        halign={Gtk.Align.CENTER}
+        label="No notifications"
+      />
+    ) as Gtk.Widget
+  }
+
+  function createRevealerForNotif(
+    n: import("gi://AstalNotifd").default.Notification,
+  ): Gtk.Revealer {
+    const row = notificationRow(n)
+    row.add_css_class("entering")
+    const revealer = new Gtk.Revealer({
+      // SLIDE_DOWN: Revealer 自身の allocation が 0 → 自然高さに animate するので
+      // 周りの行が自然に上下にずれる。CROSSFADE では opacity だけで高さ変化が
+      // 起きず、新規追加/削除に合わせた slide が起きなかった。
+      transitionType: Gtk.RevealerTransitionType.SLIDE_DOWN,
+      transitionDuration: NOTIF_ANIM_MS,
+      revealChild: false,
+    })
+    revealer.set_child(row)
+    return revealer
+  }
+
+  function startEnter(id: number, revealer: Gtk.Revealer) {
+    const token = bumpToken(id)
+    const child = revealer.get_child()
+    if (child) {
+      // 万一 leaving 状態だったら戻す。entering は createRevealerForNotif で既に付与済。
+      child.remove_css_class("leaving")
+      child.add_css_class("entering")
     }
-    let child = list.get_first_child()
-    while (child) {
-      const next = child.get_next_sibling()
-      list.remove(child)
-      child = next
-    }
-    createRoot((d) => {
-      dispose = d
-      const items = notifList()
-      if (items.length === 0) {
-        list.append(
-          (
-            <label
-              cssName="SubmenuEmpty"
-              halign={Gtk.Align.CENTER}
-              label="No notifications"
-            />
-          ) as Gtk.Widget,
-        )
-        return
-      }
-      for (const n of items) {
-        list.append(notificationRow(n))
-      }
+    // Phase 1: Revealer 展開 (高さ 0 → natural)。
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
+      revealer.set_reveal_child(true)
+      // Phase 2: Revealer の展開が終わってから CSS slide-in を始動。
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
+        if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
+        const c = revealer.get_child()
+        if (c) c.remove_css_class("entering")
+        return GLib.SOURCE_REMOVE
+      })
+      return GLib.SOURCE_REMOVE
     })
   }
-  rebuild()
-  onCleanup(notifList.subscribe(rebuild))
+
+  function startLeave(id: number, revealer: Gtk.Revealer) {
+    const token = bumpToken(id)
+    const child = revealer.get_child()
+    if (child) {
+      // entering 中なら入場をキャンセルして leaving に切替え。CSS の transition
+      // が translateX(0) ←→ translateX(48) の間で走る。
+      child.remove_css_class("entering")
+      child.add_css_class("leaving")
+    }
+    // Phase 1: CSS slide-out 完了を待つ。
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
+      if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
+      // Phase 2: Revealer 折りたたみ (natural → 0)。周りの行が上にスライドする。
+      revealer.set_reveal_child(false)
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
+        if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
+        // Phase 3: DOM から削除 + reactive scope を dispose。
+        try {
+          list.remove(revealer)
+        } catch {
+          // already removed
+        }
+        const dispose = disposeById.get(id)
+        if (dispose) {
+          dispose()
+          disposeById.delete(id)
+        }
+        animTokenById.delete(id)
+        return GLib.SOURCE_REMOVE
+      })
+      return GLib.SOURCE_REMOVE
+    })
+  }
+
+  function reconcile() {
+    const items = notifList()
+    const itemIds = new Set(items.map((n) => n.id))
+
+    // 1. 消えた通知に leave アニメを当てる
+    for (const [id, revealer] of [...revealerById]) {
+      if (!itemIds.has(id)) {
+        startLeave(id, revealer)
+        revealerById.delete(id)
+      }
+    }
+
+    // 2. 空状態の表示切替
+    if (items.length === 0) {
+      if (!emptyLabel) {
+        emptyLabel = createEmptyLabel()
+        list.append(emptyLabel)
+      }
+    } else if (emptyLabel) {
+      try {
+        list.remove(emptyLabel)
+      } catch {
+        // ignore
+      }
+      emptyLabel = null
+    }
+
+    // 3. 新規通知を items 順に挿入 (既存はそのまま位置を保つ)
+    let prev: Gtk.Revealer | null = null
+    for (const n of items) {
+      const existing = revealerById.get(n.id)
+      if (existing) {
+        prev = existing
+        continue
+      }
+      // 各 row 専用の reactive scope。JSX 内部の onCleanup はここに紐づく。
+      // scope は startLeave の Phase 3 (DOM 削除) で dispose する。
+      let revealer!: Gtk.Revealer
+      createRoot((dispose) => {
+        revealer = createRevealerForNotif(n)
+        disposeById.set(n.id, dispose)
+      })
+      if (prev) {
+        list.insert_child_after(revealer, prev)
+      } else {
+        list.prepend(revealer)
+      }
+      revealerById.set(n.id, revealer)
+      prev = revealer
+      startEnter(n.id, revealer)
+    }
+  }
+
+  reconcile()
+  onCleanup(notifList.subscribe(reconcile))
+  // submenu 自体が捨てられたら、まだ leave アニメ中で残っている scope も解放。
+  onCleanup(() => {
+    for (const d of disposeById.values()) {
+      try { d() } catch { /* ignore */ }
+    }
+    disposeById.clear()
+  })
 
   return (
     <box orientation={Gtk.Orientation.VERTICAL} spacing={4}>

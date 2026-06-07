@@ -1095,11 +1095,20 @@ window.StatusMenuLayer {
         }
 
         // Notifications
+        // - 出現時: 左から slide-in + fade-in
+        // - 消失時: 右へ slide-out + fade-out
+        // - 高さの折りたたみは Gtk.Revealer (CROSSFADE) が担当するので
+        //   既存通知は新規追加 / 削除に合わせて自然に上下に動く。
         NotifRow {
           background: rgba(255, 255, 255, 0.04);
           border-radius: 8px;
           padding: 8px 10px;
           margin: 2px 0;
+          opacity: 1;
+          transform: translateX(0);
+          transition:
+            transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+            opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
 
           NotifRowTop {
             NotifIcon {
@@ -1171,18 +1180,42 @@ window.StatusMenuLayer {
           }
         }
 
+        // 通知の入場 / 退場のアニメ用。
+        // - entering: 左 32px から滑り込んでフェードイン
+        // - leaving:  右 48px へ滑り出してフェードアウト(早めの easing)
+        // Revealer の CROSSFADE と並列に動いて高さ折りたたみも同時進行。
+        NotifRow.entering {
+          opacity: 0;
+          transform: translateX(-32px);
+        }
+
+        NotifRow.leaving {
+          opacity: 0;
+          transform: translateX(48px);
+          transition:
+            transform 280ms cubic-bezier(0.7, 0, 0.84, 0),
+            opacity 240ms cubic-bezier(0.7, 0, 0.84, 0);
+        }
+
         // default action がある通知だけホバー時に薄く明るくしてクリック可能を示す。
         NotifRow.clickable:hover {
           background: rgba(255, 255, 255, 0.08);
         }
       }
 
+      // 非 overlay なので scrollbar 自体が幅を持つ。細めに描いて、内容との
+      // 間に少し余白を作って干渉感を消す。
       scrollbar {
         background: transparent;
+        border: none;
+        padding: 0 2px;
+        margin-left: 4px;
+        min-width: 6px;
         slider {
           background: #5a5a5a;
           border-radius: 8px;
           min-width: 4px;
+          margin: 2px 0;
         }
         slider:hover {
           background: #7a7a7a;
