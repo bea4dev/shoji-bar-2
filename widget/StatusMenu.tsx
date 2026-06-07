@@ -1569,7 +1569,7 @@ export function notificationRow(
 // =============================================================================
 function SlidersIsland(): Gtk.Widget {
   return (
-    <box cssName="SlidersIsland" orientation={Gtk.Orientation.VERTICAL} spacing={6}>
+    <box cssName="SlidersIsland" orientation={Gtk.Orientation.VERTICAL} spacing={0}>
       {sliderRow(
         createComputed(() =>
           speakerMute() || speakerVolume() === 0
@@ -1622,11 +1622,20 @@ function sliderRow(
     lock = false
   })
 
+  // 0..1 の値を "  0" / " 50" / "100" の 3 桁右寄せ表記に。等幅フォントと
+  // 組み合わせることで、値が変わってもラベル幅が揺れずスライダー位置が
+  // 動かない。
+  const valueLabel = value((v) => {
+    const n = Math.round(Math.max(0, Math.min(1, v)) * 100)
+    return n.toString().padStart(3, " ")
+  })
+
   return (
-    <box cssName="SliderRow" spacing={8}>
+    <box cssName="SliderRow" spacing={6}>
       <button cssName="SliderIcon" onClicked={onIconClick}>
-        <image file={iconFile} pixelSize={16} />
+        <image file={iconFile} pixelSize={14} />
       </button>
+      <label cssName="SliderValue" label={valueLabel} />
       {slider}
     </box>
   ) as Gtk.Widget

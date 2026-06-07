@@ -1027,11 +1027,6 @@ window.Bar {
     StatusButtonRow {
       StatusButtonIcon {
         -gtk-icon-size: 14px;
-        opacity: 0.7;
-      }
-
-      StatusButtonIcon.active {
-        opacity: 1.0;
       }
     }
   }
@@ -1042,10 +1037,6 @@ window.Bar {
 
   StatusButton.pressed {
     background: $accent-color;
-
-    StatusButtonRow StatusButtonIcon {
-      opacity: 1.0;
-    }
   }
 }
 
@@ -1058,7 +1049,7 @@ window.StatusMenuLayer {
     border-radius: 10px;
     min-width: 380px;
     min-height: 620px;
-    transform: translateY(-662px);
+    transform: translateY(-646px);
   }
 
   StatusMenu.open {
@@ -1067,7 +1058,7 @@ window.StatusMenuLayer {
   }
 
   StatusMenu.close {
-    transform: translateY(-662px);
+    transform: translateY(-645px);
     transition: transform 500ms cubic-bezier(0.1, 0.9, 0.2, 1);
   }
 
@@ -1232,18 +1223,29 @@ window.StatusMenuLayer {
     background: $bg-up-color;
     border-radius: 10px;
     margin: 10px 10px 0 10px;
-    padding: 10px;
+    padding: 4px 8px;
 
     SliderRow {
       SliderIcon {
         background: transparent;
         border-radius: 6px;
-        padding: 4px;
+        padding: 2px;
         min-height: 0;
+        min-width: 0;
       }
 
       SliderIcon:hover {
         background: rgba(255, 255, 255, 0.08);
+      }
+
+      // 0..100 の数値表示。padStart(3, " ") されているので、等幅フォントで
+      // 描けば桁の揺れによるレイアウト変動が出ない。
+      SliderValue {
+        color: $text-active-color;
+        font-family: monospace;
+        font-size: 12px;
+        font-feature-settings: "tnum";
+        min-width: 24px;
       }
 
       // MediaProgress と完全に同じ寸法/挙動。
