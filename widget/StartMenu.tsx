@@ -24,6 +24,29 @@ const LAYER_STATE = new LayerState<StartMenuState>()
 
 const apps = new AstalApps.Apps()
 
+export type StartMenuAction = "toggle" | "open" | "close"
+
+// 外部(ags request 経由の ShojiWM config 等)から StartMenu を操作する。
+// connector(コネクタ名 = ShojiWM のモニタ名)で対象モニタを特定する。
+// 見つからない場合は先頭モニタにフォールバックする。
+export function controlStartMenu(
+  connector: string | null,
+  action: StartMenuAction = "toggle",
+) {
+  const monitors = app.get_monitors()
+  const target =
+    (connector
+      ? monitors.find((monitor) => monitor.get_connector() === connector)
+      : undefined) ?? monitors[0]
+  if (!target) {
+    return
+  }
+  LAYER_STATE.then(target, (state) => {
+    const open = action === "toggle" ? !state.isOpen() : action === "open"
+    state.setOpen(open)
+  })
+}
+
 export function StartMenuButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   return (
     <button
