@@ -7,6 +7,7 @@ import { ClockMenuLayer } from "./widget/ClockMenu"
 import { WallpaperBackground, WallpaperLayer } from "./widget/Wallpaper"
 import { DockWindow } from "./widget/Dock"
 import { StatusMenuLayer } from "./widget/StatusMenu"
+import { NotifPopupLayer } from "./widget/NotifPopup"
 
 app.start({
   css: style,
@@ -22,6 +23,7 @@ app.start({
             <ClockMenuLayer gdkmonitor={monitor} />
             <WallpaperLayer gdkmonitor={monitor} />
             <StatusMenuLayer gdkmonitor={monitor} />
+            <NotifPopupLayer gdkmonitor={monitor} />
             <Bar gdkmonitor={monitor} />
             <DockWindow gdkmonitor={monitor} />
           </This>

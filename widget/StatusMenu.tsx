@@ -1248,7 +1248,7 @@ function buildNotifIcon(
   ) as Gtk.Widget
 }
 
-function notificationRow(
+export function notificationRow(
   n: import("gi://AstalNotifd").default.Notification,
 ): Gtk.Widget {
   const ageLabel = (() => {
@@ -1289,6 +1289,9 @@ function notificationRow(
     }
   }
 
+  // 行全体クリックで default action を発火する gesture で、close / action button
+  // 上のクリックは除外するために、子 button への参照をここで集める。
+  const innerButtons: Gtk.Widget[] = []
   const actionsRow =
     visibleActions.length > 0 ? (
       <box cssName="NotifActions" spacing={6} halign={Gtk.Align.END}>
@@ -1296,6 +1299,7 @@ function notificationRow(
           <button
             cssName="NotifActionButton"
             onClicked={() => invokeAction(a.id)}
+            $={(self) => innerButtons.push(self)}
           >
             <label label={a.label || a.id} />
           </button>
@@ -1360,6 +1364,7 @@ function notificationRow(
               // ignore
             }
           }}
+          $={(self) => innerButtons.push(self)}
         >
           <label label="×" />
         </button>
@@ -1369,11 +1374,22 @@ function notificationRow(
   ) as Gtk.Box
 
   // body クリック (= 行全体クリック) で default action を発火。
-  // GestureClick は子の button (close / action) で消費されないクリックだけ拾う。
+  // "pressed" は子 button が claim する前に発火してしまうので、pick で
+  // 実クリック対象を取り出し、close / action button 配下なら何もしない。
   if (hasDefaultAction) {
     const gesture = Gtk.GestureClick.new()
     gesture.set_button(Gdk.BUTTON_PRIMARY)
-    gesture.connect("pressed", () => invokeAction("default"))
+    gesture.connect("pressed", (_g, _nPress, x, y) => {
+      const picked = row.pick(x, y, Gtk.PickFlags.DEFAULT)
+      if (picked) {
+        for (const btn of innerButtons) {
+          if (picked === btn || (picked as Gtk.Widget).is_ancestor(btn)) {
+            return
+          }
+        }
+      }
+      invokeAction("default")
+    })
     row.add_controller(gesture)
   }
 
