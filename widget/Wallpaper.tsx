@@ -6,6 +6,7 @@ import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { LayerState } from "../utils/LayerState"
 import { isPointInsideWidget } from "../utils/pointInside"
+import { identifyMonitors } from "./MonitorIdentify"
 import {
   wallpaperConfig,
   effectiveWallpaper,
@@ -223,7 +224,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       dialogPendingTimeoutId = null
 
       const dialog = new Gtk.FileDialog({
-        title: "壁紙ディレクトリを選択",
+        title: "Select wallpaper directory",
         modal: false,
       })
       dialog.set_initial_folder(
@@ -290,7 +291,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           <label
             cssName="WallpaperDirCaption"
             halign={Gtk.Align.START}
-            label="ディレクトリ"
+            label="Directory"
           />
           <label
             cssName="WallpaperDirPath"
@@ -307,7 +308,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           valign={Gtk.Align.CENTER}
           onClicked={() => chooseDirectory()}
         >
-          <label label="変更..." />
+          <label label="Change..." />
         </button>
       </box>
 
@@ -376,17 +377,24 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             class={applyMode((m) => (m === "all" ? "active" : ""))}
             onClicked={() => setApplyMode("all")}
           >
-            <label label="全モニタ" />
+            <label label="All monitors" />
           </button>
           <button
             cssName="WallpaperModeButton"
             class={applyMode((m) => (m === "this" ? "active" : ""))}
             onClicked={() => setApplyMode("this")}
           >
-            <label label={`このモニタ (${connector ?? "?"})`} />
+            <label label={`This monitor (${connector ?? "?"})`} />
           </button>
         </box>
         <box hexpand />
+        <button
+          cssName="WallpaperIdentifyButton"
+          valign={Gtk.Align.CENTER}
+          onClicked={() => identifyMonitors()}
+        >
+          <label label="Identify monitors" />
+        </button>
         <button
           cssName="WallpaperClearButton"
           valign={Gtk.Align.CENTER}
@@ -395,7 +403,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             if (connector) clearMonitorOverride(connector)
           }}
         >
-          <label label="override 解除" />
+          <label label="Clear override" />
         </button>
       </box>
     </box>
