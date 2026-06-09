@@ -25,8 +25,8 @@ type WallpaperMenuState = {
 const LAYER_STATE = new LayerState<WallpaperMenuState>()
 
 // =============================================================================
-// 背景ウィンドウ: layer-shell の BACKGROUND レイヤに壁紙を 1 枚描く。
-// effectiveWallpaper(global / per-monitor override) の変化に追従する。
+// Background window: draws one wallpaper on layer-shell's BACKGROUND layer.
+// Follows changes to effectiveWallpaper (global / per-monitor override).
 // =============================================================================
 
 export function WallpaperBackground({
@@ -76,7 +76,7 @@ export function WallpaperBackground({
 }
 
 // =============================================================================
-// バー上のトリガーボタン
+// Trigger button on the bar
 // =============================================================================
 
 export function WallpaperButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
@@ -100,7 +100,7 @@ export function WallpaperButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 }
 
 // =============================================================================
-// プルダウン本体
+// The pulldown itself
 // =============================================================================
 
 const THUMBNAIL_WIDTH = 168
@@ -111,7 +111,7 @@ type ThumbnailEntry = {
   paintable: GdkPixbuf.Pixbuf | null
 }
 
-// Pixbuf 読み込みは CPU/IO コストがあるため一度読んだものをプロセス内でキャッシュ。
+// Loading a Pixbuf has CPU/IO cost, so cache loaded ones in-process.
 const thumbnailCache = new Map<string, GdkPixbuf.Pixbuf>()
 
 function loadThumbnail(path: string, scale: number): GdkPixbuf.Pixbuf | null {
@@ -123,7 +123,7 @@ function loadThumbnail(path: string, scale: number): GdkPixbuf.Pixbuf | null {
       path,
       THUMBNAIL_WIDTH * scale,
       THUMBNAIL_HEIGHT * scale,
-      false, // aspect ratio を維持しない(セル全体を覆う)
+      false, // don't preserve aspect ratio (cover the whole cell)
     )
     if (pixbuf) {
       thumbnailCache.set(key, pixbuf)
@@ -135,7 +135,7 @@ function loadThumbnail(path: string, scale: number): GdkPixbuf.Pixbuf | null {
   }
 }
 
-// ディレクトリ内の画像一覧をリアクティブに保持。
+// Hold the directory's image list reactively.
 const [entries, setEntries] = createState<ThumbnailEntry[]>([])
 
 let inFlightDirectory: string | null = null
@@ -155,7 +155,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const scale = gdkmonitor.get_scale_factor()
   const [isOpen, setIsOpen] = createState(false)
   const [mounted, setMounted] = createState(false)
-  // "all" = 全モニタに適用 / "this" = このモニタだけ override
+  // "all" = apply to all monitors / "this" = override this monitor only
   const [applyMode, setApplyMode] = createState<"all" | "this">("all")
 
   let closeTimeoutId: number | null = null
@@ -181,7 +181,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     clearTimers()
 
     if (open) {
-      // 開くたびに最新のディレクトリ内容を読み直す
+      // Re-read the latest directory contents each time it opens
       refreshEntries(wallpaperConfig().directory, scale)
       setMounted(true)
 
@@ -206,7 +206,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const states: WallpaperMenuState = { isOpen, setOpen }
   LAYER_STATE.set(gdkmonitor, states)
 
-  // 設定の directory 変更にも追従(他モニタの WallpaperLayer から更新された場合)
+  // Also follow directory changes in config (e.g. updated from another monitor's WallpaperLayer)
   wallpaperConfig.subscribe(() => {
     if (mounted()) {
       refreshEntries(wallpaperConfig().directory, scale)
@@ -214,10 +214,10 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   })
 
   function chooseDirectory() {
-    // WallpaperLayer は OVERLAY なので、xdg-shell の FileDialog は下に潜るうえに
-    // 全画面の outsideClick ジェスチャでクリックを横取りしてしまう。
-    // setOpen(false) でクローズアニメを開始し、surface が unmount された後に
-    // ダイアログを出し、戻ってきたら setOpen(true) で再オープンする。
+    // WallpaperLayer is OVERLAY, so the xdg-shell FileDialog goes underneath, and
+    // the full-screen outsideClick gesture would steal its clicks.
+    // So start the close animation with setOpen(false), and after the surface unmounts
+    // show the dialog, then reopen with setOpen(true) when it returns.
     setOpen(false)
 
     dialogPendingTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 520, () => {
@@ -238,9 +238,9 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
             setDirectory(newDir)
           }
         } catch {
-          // キャンセル
+          // cancelled
         }
-        // 選択完了/キャンセル後にメニューを開き直す
+        // Reopen the menu after the selection completes/cancels
         setOpen(true)
       })
 
@@ -275,7 +275,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     >
       <box cssName="FirstPadding" />
 
-      {/* 上の島: ディレクトリ表示 + 変更ボタン */}
+      {/* Top island: directory display + change button */}
       <box
         cssName="WallpaperDirIsland"
         orientation={Gtk.Orientation.HORIZONTAL}
@@ -312,7 +312,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         </button>
       </box>
 
-      {/* 中央の島: サムネ一覧 */}
+      {/* Center island: thumbnail grid */}
       <scrolledwindow
         cssName="WallpaperGridScroll"
         hscrollbarPolicy={Gtk.PolicyType.NEVER}
@@ -329,10 +329,10 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           columnSpacing={8}
           homogeneous
           $={(self) => {
-            // FlowBox は children を直接 JSX で生やせないので生で詰める。
-            // rebuild は state.subscribe のコールバックから呼ばれるため、tracking context
-            // の外側になり、子の <button>/<Gtk.Picture> 生成内で onCleanup が登録できず警告が出る。
-            // createRoot でスコープを作り、rebuild ごとに前回のスコープを dispose して再生成する。
+            // FlowBox can't take JSX children directly, so populate it imperatively.
+            // rebuild is called from the state.subscribe callback, so it is outside the tracking
+            // context, and onCleanup inside the child <button>/<Gtk.Picture> can't register, causing a warning.
+            // Create a scope with createRoot and dispose/recreate it on each rebuild.
             let disposeItems: (() => void) | null = null
 
             const rebuild = () => {
@@ -364,7 +364,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         />
       </scrolledwindow>
 
-      {/* 下の島: 適用範囲の切替 + override 解除 */}
+      {/* Bottom island: apply-scope toggle + clear override */}
       <box
         cssName="WallpaperControlIsland"
         orientation={Gtk.Orientation.HORIZONTAL}
@@ -448,7 +448,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   return window
 }
 
-// FlowBox の 1 セル
+// One FlowBox cell
 function buildThumbnailItem(
   entry: ThumbnailEntry,
   currentPath: string | null,

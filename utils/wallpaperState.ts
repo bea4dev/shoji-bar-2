@@ -2,13 +2,13 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { createState } from "gnim"
 
-// 壁紙設定の永続化 + リアクティブ共有状態。
+// Wallpaper config persistence + reactive shared state.
 //
-// global: 全モニタ共通の壁紙パス
-// overrides: connector(モニタ名) ごとの上書き
-// directory: サムネ一覧に表示する画像ディレクトリ
+// global: wallpaper path shared by all monitors
+// overrides: per-connector (monitor name) override
+// directory: image directory shown in the thumbnail grid
 //
-// 設定ファイルは ~/.config/shoji-bar-2/wallpapers.json。
+// The config file is ~/.config/shoji-bar-2/wallpapers.json.
 
 export type WallpaperConfig = {
   directory: string
@@ -90,7 +90,7 @@ export function setWallpaperConfig(config: WallpaperConfig) {
   saveConfig(config)
 }
 
-// connector の有効壁紙(override 優先、無ければ global)
+// Effective wallpaper for a connector (override first, otherwise global)
 export function effectiveWallpaper(
   config: WallpaperConfig,
   connector: string | null,
@@ -101,14 +101,14 @@ export function effectiveWallpaper(
   return config.global
 }
 
-// 設定ヘルパ群 ----------------------------------------------------------------
+// Config helpers -------------------------------------------------------------
 
 export function setDirectory(directory: string) {
   setWallpaperConfig({ ...wallpaperConfig(), directory })
 }
 
 export function applyToAllMonitors(path: string) {
-  // 全モニタ共通(global)に設定。override は全て解除して上書きの揺れを無くす
+  // Set the shared (global) wallpaper. Clear all overrides to avoid inconsistency
   setWallpaperConfig({
     ...wallpaperConfig(),
     global: path,
@@ -131,7 +131,7 @@ export function clearMonitorOverride(connector: string) {
   setWallpaperConfig({ ...current, overrides: next })
 }
 
-// 画像列挙 --------------------------------------------------------------------
+// Image enumeration -----------------------------------------------------------
 
 const IMAGE_MIME = new Set([
   "image/png",
@@ -156,7 +156,7 @@ function hasImageExt(name: string): boolean {
   return false
 }
 
-// directory 直下の画像をファイル名昇順で返す(非同期)。
+// Return images directly under directory, sorted by filename ascending (async).
 export function listWallpapers(directory: string): Promise<string[]> {
   return new Promise((resolve) => {
     const dir = Gio.File.new_for_path(directory)

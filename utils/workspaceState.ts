@@ -1,7 +1,7 @@
 import { createState } from "gnim"
 import { connectShojiIpc, type ShojiIpcClient } from "./shojiIpc"
 
-// ShojiWM の workspaces.* IPC が返すビュー(protocol と一致させる)
+// View returned by ShojiWM's workspaces.* IPC (kept in sync with the protocol).
 export type WsWindow = {
   id: string
   appId?: string
@@ -20,12 +20,12 @@ export type WsWorkspace = {
 export type WsMonitor = { name: string; active: number; workspaces: WsWorkspace[] }
 export type WsView = { currentMonitor: string; monitors: WsMonitor[] }
 
-// バープロセスにつき 1 本の共有接続。ワークスペース/レイアウト両ウィジェットが
-// 同じ view を購読する。
+// One shared connection per bar process. Both the workspace and layout widgets
+// subscribe to the same view.
 const [view, setView] = createState<WsView | null>(null)
 export { view }
 
-// dock.proximity の状態を connector ごとに保持。Dock は自モニタのフラグだけ見る。
+// Hold dock.proximity state per connector. The Dock only reads its own monitor's flag.
 const [dockProximity, setDockProximity] = createState<Record<string, boolean>>({})
 export { dockProximity }
 
@@ -47,7 +47,7 @@ export const ipc: ShojiIpcClient = connectShojiIpc(
     }
   },
   {
-    // 接続(および再接続)のたびに初期状態を取得する
+    // Fetch the initial state on each connect (and reconnect)
     onConnect: (client) => client.request("workspaces.get"),
   },
 )
@@ -65,7 +65,7 @@ export function monitorView(
       return matched
     }
   }
-  // connector 不明時は現在のモニタ、それも無ければ先頭
+  // If the connector is unknown, fall back to the current monitor, otherwise the first
   return (
     v.monitors.find((monitor) => monitor.name === v.currentMonitor) ??
     v.monitors[0] ??
@@ -73,7 +73,7 @@ export function monitorView(
   )
 }
 
-// モニタの現在(アクティブ)ワークスペースを返す
+// Return the monitor's current (active) workspace
 export function activeWorkspace(monitor: WsMonitor | null): WsWorkspace | null {
   if (!monitor) {
     return null

@@ -16,31 +16,31 @@ import {
 } from "../utils/statusServices"
 
 /**
- * バー上のバッテリーインジケーター。
- * - present でないときは widget 自体を見えなくする
- *   (`visible` バインディング: presence は基本起動後変わらないので
- *    リアクティブで起こる問題は少ない)
- * - 残量に応じてアイコンを切替え
- * - 等幅 3 桁の "%X" 表記
- * - クリックで popover を出して詳細情報を表示
+ * Battery indicator on the bar.
+ * - Hide the widget itself when not present
+ *   (`visible` binding: presence basically doesn't change after startup, so
+ *    reactive issues are unlikely)
+ * - Switch the icon based on charge level
+ * - Monospace 3-digit "%X" display
+ * - Click to open a popover with detailed info
  */
 export function BatteryButton() {
-  // popover 開閉状態 (menubutton の active プロパティと連動)。
-  // pressed クラスを切替えて他のバーボタンと同じ accent 色背景にする + アイコンを
-  // 黒バージョンに差し替える。
+  // Popover open/closed state (tied to the menubutton's active property).
+  // Toggle the pressed class for the same accent background as other bar buttons + swap the icon
+  // to the black version.
   const [pressed, setPressed] = createState(false)
 
-  // 0..1 を 0..100 整数に。フォントは monospace のまま (等幅維持) だが、
-  // 順番がアイコンより前 (左端) なので空白で埋めると見栄えが悪い。padStart は
-  // やらず、桁の揺れは右側 (= アイコン位置) で吸収する。
+  // 0..1 to a 0..100 integer. The font stays monospace (fixed width), but
+  // since it comes before the icon (leftmost), padding with spaces looks bad. We don't
+  // padStart; digit-count changes are absorbed on the right (= the icon position).
   const percentLabel = createComputed(() => {
     const p = batteryPercentage()
     const n = Math.round(Math.max(0, Math.min(1, p)) * 100)
     return `${n}%`
   })
 
-  // アイコンファイル名: percentage / state / pressed の組合せで決まる。
-  // pressed (= popover 開いてる) ときは accent 色背景上なので -dark を使う。
+  // Icon filename: determined by the percentage / state / pressed combination.
+  // When pressed (= popover open) it's on an accent background, so use -dark.
   const iconFile = createComputed(() => {
     batteryPercentage()
     batteryState()
@@ -48,7 +48,7 @@ export function BatteryButton() {
     return `${SRC}/assets/${batteryIconName()}${dark}.svg`
   })
 
-  // popover 内の大きいアイコンは常に bg-color の上に乗るので白固定。
+  // The large icon in the popover always sits on bg-color, so keep it white.
   const iconFileWhite = createComputed(() => {
     batteryPercentage()
     batteryState()
@@ -56,7 +56,7 @@ export function BatteryButton() {
   })
 
   // ---- popover content ----
-  // 残り時間: discharging のときは timeToEmpty、charging のときは timeToFull。
+  // Remaining time: timeToEmpty when discharging, timeToFull when charging.
   const remainingText = createComputed(() => {
     if (batteryCharging()) {
       const t = batteryTimeToFull()
@@ -100,10 +100,10 @@ export function BatteryButton() {
       visible={batteryPresent}
       valign={Gtk.Align.CENTER}
       $={(self) => {
-        // popover 開閉を pressed state に反映 (menubutton.active を観測)。
+        // Reflect popover open/close into the pressed state (observe menubutton.active).
         self.connect("notify::active", () => setPressed(self.get_active()))
-        // menubutton の child を image にしつつ、横にラベルも並べたいので
-        // 自前で box を組み立てる。
+        // We want the menubutton's child to be an image with a label beside it, so
+        // build the box ourselves.
         const row = (
           <box cssName="BatteryRow" spacing={4} valign={Gtk.Align.CENTER}>
             <label cssName="BatteryPercent" label={percentLabel} />

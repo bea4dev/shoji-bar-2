@@ -5,10 +5,10 @@ import { createState } from "gnim"
 import { ipc, view, type WsMonitor, type WsWindow } from "./workspaceState"
 
 // =============================================================================
-// Pinned apps (永続化 + reactive)
-// 永続化先: ~/.config/shoji-bar-2/dock.json  形式: { pinned: string[] }
-//   配列の要素は AstalApps.Application.entry (= .desktop の basename) を入れる。
-//   app_id ベースだと desktop ID と一致しない場合があるため、安定な desktop ID を採用。
+// Pinned apps (persisted + reactive)
+// Stored at: ~/.config/shoji-bar-2/dock.json  shape: { pinned: string[] }
+//   Array elements are AstalApps.Application.entry (= the .desktop basename).
+//   app_id may not match the desktop ID, so use the stable desktop ID.
 // =============================================================================
 
 type DockConfig = {
@@ -90,8 +90,8 @@ export function unpinApp(entry: string) {
 
 // =============================================================================
 // App resolution (app_id -> AstalApps.Application).
-// app_id は GTK app_id / Xwayland WM_CLASS のどちらかで、必ずしも .desktop の
-// id と一致しないため、entry / executable / name の順で照合する。
+// app_id is either the GTK app_id or the Xwayland WM_CLASS, not necessarily matching the
+// .desktop id, so match in the order entry / executable / name.
 // =============================================================================
 
 const apps = new AstalApps.Apps()
@@ -144,23 +144,23 @@ export function appDisplayName(
 
 // =============================================================================
 // Window grouping per monitor.
-// 同じ app_id のウィンドウを 1 アイテムに束ねる。MRU 順は WsWindow.lastFocusedAt
-// で決める(降順)。ピン留めだけで開かれていないアプリも同じリストに混ぜる。
+// Group windows with the same app_id into one item. MRU order is by WsWindow.lastFocusedAt
+// (descending). Pinned-but-not-running apps are mixed into the same list.
 // =============================================================================
 
 export type DockItem = {
-  /** グループキー(app_id か pinned entry)。 */
+  /** Group key (app_id or pinned entry). */
   key: string
   app: AstalApps.Application | null
   appId: string | undefined
-  windows: WsWindow[] // MRU 降順
-  /** ピン留め済みか */
+  windows: WsWindow[] // MRU descending
+  /** Whether it is pinned */
   pinned: boolean
-  /** いずれかのウィンドウが focus 中 */
+  /** Whether any window is focused */
   focused: boolean
 }
 
-/** モニタの全ワークスペースのウィンドウをフラット化。 */
+/** Flatten windows across all of the monitor's workspaces. */
 export function windowsOnMonitor(monitor: WsMonitor | null): WsWindow[] {
   if (!monitor) return []
   const out: WsWindow[] = []
@@ -172,11 +172,11 @@ export function windowsOnMonitor(monitor: WsMonitor | null): WsWindow[] {
   return out
 }
 
-/** Dock アイテム配列を構築(ピン留め優先、その後ピン無しの起動中アプリ)。 */
+/** Build the dock item array (pinned first, then unpinned running apps). */
 export function dockItemsFor(monitor: WsMonitor | null): DockItem[] {
   const allWindows = windowsOnMonitor(monitor)
 
-  // group by appId(無ければ window.id 単独グループ扱い)
+  // group by appId (fall back to a single-window group keyed by window.id)
   const byKey = new Map<string, WsWindow[]>()
   for (const window of allWindows) {
     const key = window.appId ?? `__win__${window.id}`
@@ -192,10 +192,10 @@ export function dockItemsFor(monitor: WsMonitor | null): DockItem[] {
   const seenKeys = new Set<string>()
   const out: DockItem[] = []
 
-  // ピン留めを最初に出す(順序維持)
+  // Emit pinned items first (preserving order)
   for (const entry of pinnedEntries) {
     const pinnedApp = apps.get_list().find((a) => a.entry === entry) ?? null
-    // ピン留めと同じ desktop id を持つ起動中グループを紐付ける
+    // Link the running group that shares the same desktop id as the pinned entry
     const matchingKey = [...byKey.keys()].find(
       (k) => {
         const w = byKey.get(k)?.[0]
@@ -217,7 +217,7 @@ export function dockItemsFor(monitor: WsMonitor | null): DockItem[] {
     })
   }
 
-  // ピン留めされていない起動中グループを後ろに
+  // Then the unpinned running groups
   for (const [key, windows] of byKey) {
     if (seenKeys.has(key)) continue
     const app = resolveApp(windows[0]?.appId)
@@ -235,10 +235,10 @@ export function dockItemsFor(monitor: WsMonitor | null): DockItem[] {
 }
 
 // =============================================================================
-// アクション
+// Actions
 // =============================================================================
 
-/** 左クリック: 起動中なら MRU 先頭を focus、空なら launch。 */
+/** Left click: focus the MRU-front window if running, otherwise launch. */
 export function activateOrLaunch(item: DockItem) {
   if (item.windows.length === 0) {
     if (item.app) {
@@ -250,12 +250,12 @@ export function activateOrLaunch(item: DockItem) {
   ipc.send("windows.activate", { windowId: target.id })
 }
 
-/** ウィンドウ id 指定で focus + ワークスペース移動を要求する。 */
+/** Request focus + workspace switch for a given window id. */
 export function activateWindow(windowId: string) {
   ipc.send("windows.activate", { windowId })
 }
 
-/** New window: pinned 列挙でも開けるよう個別 API を分けている。 */
+/** New window: a separate API so pinned entries can launch too. */
 export function launchAppOf(item: DockItem) {
   if (item.app) item.app.launch()
 }

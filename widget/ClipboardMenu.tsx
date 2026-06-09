@@ -19,12 +19,12 @@ type ClipboardMenuState = {
 
 const LAYER_STATE = new LayerState<ClipboardMenuState>()
 
-// 一度に描画する最大行数(軽量化のための上限)。検索で全件から絞り込んだ上で先頭 N 件を表示。
+// Max rows rendered at once (cap for performance). Filter all entries by search, then show the first N.
 const MAX_RENDERED = 100
 
 export type ClipboardAction = "toggle" | "open" | "close"
 
-// 外部(ags request 経由の ShojiWM config 等)からクリップボード履歴を操作する。
+// Control the clipboard history from outside (e.g. the ShojiWM config via ags request).
 export function controlClipboardMenu(
   connector: string | null,
   action: ClipboardAction = "toggle",
@@ -51,8 +51,8 @@ export function ClipboardMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const [selectedIndex, setSelectedIndex] = createState(0)
   const [entries, setEntries] = createState<ClipEntry[]>([])
 
-  // 検索文字列でプレビューを絞り込む(空ならすべて)。描画する行数は
-  // 上限を設けて軽量化する(履歴は最大 750 件あり、全行を一度に widget 化すると重い)。
+  // Filter previews by the search string (all when empty). The number of rendered
+  // rows is capped for performance (history holds up to 750; widget-ifying all rows at once is heavy).
   const results = createComputed(() => {
     const query = search().trim().toLowerCase()
     const all = entries()
@@ -67,7 +67,7 @@ export function ClipboardMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   let scrolledRef: Gtk.ScrolledWindow | null = null
   let listRef: Gtk.Box | null = null
 
-  // 選択行 -> ウィジェット の対応。自動スクロールに使う
+  // selected row -> widget map. Used for auto-scroll
   const rowMap = new Map<string, Gtk.Widget>()
 
   let closeTimeoutId: number | null = null
@@ -92,7 +92,7 @@ export function ClipboardMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
       setSelectedIndex(0)
       setMounted(true)
 
-      // 開くたびに最新の履歴を取得
+      // Fetch the latest history each time it opens
       listClipboard()
         .then((list) => setEntries(list))
         .catch((err) => console.error(err))
@@ -121,7 +121,7 @@ export function ClipboardMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   const states = { isOpen, setOpen }
   LAYER_STATE.set(gdkmonitor, states)
 
-  // 選択中のエントリをクリップボードへ戻してメニューを閉じる
+  // Copy the selected entry back onto the clipboard and close the menu
   function copySelected() {
     const target = results()[selectedIndex()]
     if (target) {
@@ -305,7 +305,7 @@ export function ClipboardMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) 
   return window
 }
 
-// 1 履歴エントリの行。テキストはプレビュー、画像はサムネイル + 寸法ラベル。
+// A row for one history entry. Text shows a preview; images show a thumbnail + dimensions label.
 function buildClipRow(
   entry: ClipEntry,
   index: Accessor<number>,

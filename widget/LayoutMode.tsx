@@ -2,9 +2,9 @@ import { Gdk, Gtk } from "ags/gtk4"
 import { createComputed } from "gnim"
 import { view, monitorView, activeWorkspace, ipc } from "../utils/workspaceState"
 
-// 現在のワークスペースがタイル型かフローティング型かを表示するラベル。
-// "Tiled" / "Float"(monospace)とアイコン(assets/tiled.svg, assets/float.svg)。
-// クリックでそのモニタの現在ワークスペースのタイル/フロート切替を要求する。
+// Label showing whether the current workspace is tiled or floating.
+// "Tiled" / "Float" (monospace) with icons (assets/tiled.svg, assets/float.svg).
+// Clicking requests toggling tiling/floating for that monitor's current workspace.
 export function LayoutMode({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const connector = gdkmonitor.get_connector()
 

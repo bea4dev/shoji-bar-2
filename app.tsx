@@ -21,10 +21,10 @@ import { NotifPopupLayer } from "./widget/NotifPopup"
 
 app.start({
   css: style,
-  // ShojiWM config 等から `ags request` 経由でメニューを操作する。
+  // Control menus from the ShojiWM config (etc.) via `ags request`.
   //   ags request start-menu toggle|open|close <connector>
   //   ags request clipboard  toggle|open|close <connector>
-  //   (action 省略時は toggle)
+  //   (action defaults to toggle when omitted)
   requestHandler(argv: string[], res: (response: string) => void) {
     const [command, ...rest] = argv
     const actions = ["toggle", "open", "close"] as const

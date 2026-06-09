@@ -26,9 +26,9 @@ const apps = new AstalApps.Apps()
 
 export type StartMenuAction = "toggle" | "open" | "close"
 
-// 外部(ags request 経由の ShojiWM config 等)から StartMenu を操作する。
-// connector(コネクタ名 = ShojiWM のモニタ名)で対象モニタを特定する。
-// 見つからない場合は先頭モニタにフォールバックする。
+// Control the StartMenu from outside (e.g. the ShojiWM config via ags request).
+// Identify the target monitor by connector (connector name = ShojiWM monitor name).
+// Fall back to the first monitor if not found.
 export function controlStartMenu(
   connector: string | null,
   action: StartMenuAction = "toggle",
@@ -77,21 +77,21 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const [isOpen, setIsOpen] = createState(false)
   const [mounted, setMounted] = createState(false)
 
-  // 検索文字列と選択中インデックス
+  // Search string and selected index
   const [search, setSearch] = createState("")
   const [selectedIndex, setSelectedIndex] = createState(0)
 
-  // 検索文字列に応じてアプリ一覧をリアルタイムに導出
+  // Derive the app list from the search string in real time
   const results = createComputed(() => apps.fuzzy_query(search()))
 
-  // ユーザー情報(島の表示用)
+  // User info (for the island display)
   const homeDir = GLib.get_home_dir()
   const realName = GLib.get_real_name()
   const userName =
     realName && realName !== "Unknown" ? realName : GLib.get_user_name()
   const hostName = GLib.get_host_name()
 
-  // 電源系アクション。実行後はメニューを閉じる
+  // Power actions. Close the menu after running
   function runPower(command: string) {
     execAsync(["bash", "-c", command]).catch((err) => console.error(err))
     setOpen(false)
@@ -101,7 +101,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let scrolledRef: Gtk.ScrolledWindow | null = null
   let listRef: Gtk.Box | null = null
 
-  // 選択行 -> ウィジェット の対応。自動スクロールに使う
+  // selected row -> widget map. Used for auto-scroll
   const rowMap = new Map<AstalApps.Application, Gtk.Widget>()
 
   let closeTimeoutId: number | null = null
@@ -123,18 +123,18 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     clearTimers()
 
     if (open) {
-      // 開くたびに検索状態をリセット
+      // Reset the search state each time it opens
       setSearch("")
       setSelectedIndex(0)
       setMounted(true)
 
-      // mounted=true の反映後に open class を付ける
-      // これを分けないと transition が発火しないことがある
+      // Add the open class after mounted=true takes effect
+      // Splitting these is needed or the transition sometimes doesn't fire
       openIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         openIdleId = null
         setIsOpen(true)
 
-        // 検索欄をクリアして即入力できるようフォーカスする
+        // Clear the search field and focus it for immediate input
         if (entryRef !== null) {
           entryRef.set_text("")
           entryRef.grab_focus()
@@ -145,11 +145,11 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     } else {
       setIsOpen(false)
 
-      // CSS transition の終了後に window を消す
+      // Remove the window after the CSS transition finishes
       closeTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
         closeTimeoutId = null
 
-        // 途中で再度 open されていない場合だけ unmount
+        // Only unmount if it wasn't reopened in the meantime
         if (!isOpen()) {
           setMounted(false)
         }
@@ -166,7 +166,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   LAYER_STATE.set(gdkmonitor, states)
 
-  // 選択中のアプリを起動してメニューを閉じる
+  // Launch the selected app and close the menu
   function launchSelected() {
     const list = results()
     const target = list[selectedIndex()]
@@ -177,7 +177,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     }
   }
 
-  // 選択行をスクロール範囲内に収める
+  // Keep the selected row within the scroll viewport
   function scrollSelectedIntoView() {
     const list = results()
     const target = list[selectedIndex()]
@@ -213,7 +213,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     }
   }
 
-  // 選択が変わったらレイアウト確定後にスクロール
+  // When the selection changes, scroll after layout settles
   createEffect(() => {
     selectedIndex()
     results()
@@ -467,7 +467,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 
   window.add_controller(outsideClick)
 
-  // ↑↓ で選択移動 / Enter で起動 / Esc で閉じる
+  // Up/Down to move selection / Enter to launch / Esc to close
   const keyController = Gtk.EventControllerKey.new()
   keyController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
 

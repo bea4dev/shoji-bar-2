@@ -2,11 +2,11 @@ import { Gtk } from "ags/gtk4"
 import { For, createBinding, onCleanup } from "gnim"
 import AstalTray from "gi://AstalTray"
 
-// SNI(StatusNotifierItem)ホスト。アプリのトレイアイコンを集約する。
+// SNI (StatusNotifierItem) host. Aggregates apps' tray icons.
 const tray = AstalTray.get_default()
 
-// バーのシステムトレイ。トレイアイテムを横に並べ、アイテムが 0 個なら非表示。
-// 全体を灰色半透明の丸角 box で囲ってトレイだと分かるようにする。
+// Bar system tray. Lays out tray items horizontally; hidden when there are 0 items.
+// Wrap everything in a gray translucent rounded box so it reads as a tray.
 export function SystemTray() {
   const items = createBinding(tray, "items")
 
@@ -23,8 +23,8 @@ export function SystemTray() {
   )
 }
 
-// 1 アイテム = 1 ボタン。クリックで dbusmenu の popover を出す。
-// メニューを持たないアイテムは activate() にフォールバックする。
+// One item = one button. Click opens the dbusmenu popover.
+// Items without a menu fall back to activate().
 function buildTrayItem(item: AstalTray.TrayItem): Gtk.Widget {
   let popover: Gtk.PopoverMenu | null = null
 
@@ -33,7 +33,7 @@ function buildTrayItem(item: AstalTray.TrayItem): Gtk.Widget {
       cssName="SystemTrayItem"
       tooltipText={createBinding(item, "tooltipText")}
       onClicked={() => {
-        // 遅延生成されるメニューに備え、表示前に about_to_show を呼ぶ
+        // Call about_to_show before showing, in case the menu is generated lazily
         item.about_to_show()
         const model = item.get_menu_model()
         if (model) {
@@ -41,7 +41,7 @@ function buildTrayItem(item: AstalTray.TrayItem): Gtk.Widget {
             popover = Gtk.PopoverMenu.new_from_model(model)
             popover.set_has_arrow(true)
             popover.set_position(Gtk.PositionType.BOTTOM)
-            // スコープ用クラス(グローバルテーマ貫通を防ぐ)
+            // Scoping class (prevents the global theme from bleeding through)
             popover.add_css_class("SystemTrayPopover")
             popover.set_parent(button)
           } else {
@@ -53,7 +53,7 @@ function buildTrayItem(item: AstalTray.TrayItem): Gtk.Widget {
           }
           popover.popup()
         } else {
-          // メニューが無いアイテムは左クリックで activate
+          // Items without a menu: activate on left click
           item.activate(0, 0)
         }
       }}

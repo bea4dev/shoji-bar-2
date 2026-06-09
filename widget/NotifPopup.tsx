@@ -6,14 +6,14 @@ import type AstalNotifd from "gi://AstalNotifd"
 import { notifd } from "../utils/statusServices"
 import { notificationRow } from "./StatusMenu"
 
-// 1 件あたりの表示時間。経過後は右へスライドアウトして非表示にする
-// (dismiss はしない: 通知欄には残る)。
+// Display time per item. After it elapses, slide out to the right and hide
+// (does not dismiss: it stays in the notification list).
 const POPUP_TIMEOUT_MS = 5000
-// アニメ時間 (NotifRow CSS の transition と Revealer の transitionDuration の
-// 短いほう。CSS 側の 500ms と Revealer 240ms を直列に動かす)。
+// Animation time (the shorter of the NotifRow CSS transition and the Revealer's
+// transitionDuration. The CSS 500ms and Revealer 240ms run in series).
 const REVEALER_MS = 240
 const CSS_MS = 500
-// 一度に積み上げる最大件数。あふれたら古い方から消す。
+// Max stacked at once. When it overflows, drop the oldest first.
 const MAX_POPUPS = 5
 
 type Entry = {
@@ -42,9 +42,9 @@ export function NotifPopupLayer({
 
   const entries = new Map<number, Entry>()
   let tokenCounter = 0
-  // popup が 1 件以上あるときだけ layer window を実体化する。
-  // - 性能 (壁紙やゲーム上で常駐させない)
-  // - 透明領域のクリック吸い込み防止 (visible=false ならサーフェス自体が無い)
+  // Materialize the layer window only when there is at least one popup.
+  // - Performance (don't keep it resident over wallpaper or games)
+  // - Avoid swallowing clicks in transparent areas (visible=false means no surface at all)
   const [windowVisible, setWindowVisible] = createState(false)
 
   function bumpToken(id: number): number {
@@ -80,13 +80,13 @@ export function NotifPopupLayer({
   function showPopup(n: AstalNotifd.Notification) {
     const id = n.id
 
-    // 既に出ているなら timer だけリセット (更新通知のケース)。
+    // If already shown, just reset the timer (update-notification case).
     if (entries.has(id)) {
       scheduleAutoHide(id)
       return
     }
 
-    // 同時表示数の上限を超えそうなら最古を hide させる。
+    // If we'd exceed the simultaneous limit, hide the oldest.
     while (entries.size >= MAX_POPUPS) {
       const oldestId = entries.keys().next().value
       if (oldestId === undefined || oldestId === id) break
@@ -94,7 +94,7 @@ export function NotifPopupLayer({
       break
     }
 
-    // 0 → 1 件目: layer window を実体化。
+    // 0 -> first item: materialize the layer window.
     if (entries.size === 0) setWindowVisible(true)
 
     createRoot((dispose) => {
@@ -118,7 +118,7 @@ export function NotifPopupLayer({
       const token = bumpToken(id)
       list.append(revealer)
 
-      // Enter sequence: Revealer 展開 → 完了後に entering クラス除去で CSS slide-in。
+      // Enter sequence: expand the Revealer -> after it completes, remove the entering class for the CSS slide-in.
       GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
         revealer.set_reveal_child(true)
@@ -148,10 +148,10 @@ export function NotifPopupLayer({
       child.remove_css_class("entering")
       child.add_css_class("leaving")
     }
-    // Phase 1: CSS slide-out (右へ).
+    // Phase 1: CSS slide-out (to the right).
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, CSS_MS + 20, () => {
       if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
-      // Phase 2: Revealer 折りたたみ.
+      // Phase 2: collapse the Revealer.
       entry.revealer.set_reveal_child(false)
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, REVEALER_MS + 20, () => {
         if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
@@ -162,7 +162,7 @@ export function NotifPopupLayer({
         }
         entry.dispose()
         entries.delete(id)
-        // 最後の 1 件が消えたら window 自体を非表示に。
+        // When the last item disappears, hide the window itself.
         if (entries.size === 0) setWindowVisible(false)
         return GLib.SOURCE_REMOVE
       })
@@ -170,14 +170,14 @@ export function NotifPopupLayer({
     })
   }
 
-  // 新着通知 → popup 表示。DND 中はスキップ。
+  // New notification -> show popup. Skip while in DND.
   const notifiedHandlerId = notifd.connect("notified", (_self, id: number) => {
     if (notifd.dontDisturb) return
     const n = notifd.get_notification(id)
     if (n) showPopup(n)
   })
-  // 通知が dismiss/resolve された (popup の close ボタン経由 or 通知欄経由 or
-  // app 側からの解決) ら popup も hide。
+  // When a notification is dismissed/resolved (via the popup's close button, the notification list, or
+  // resolved by the app), hide the popup too.
   const resolvedHandlerId = notifd.connect(
     "resolved",
     (_self, id: number) => {
@@ -193,10 +193,10 @@ export function NotifPopupLayer({
       layer={Astal.Layer.OVERLAY}
       exclusivity={Astal.Exclusivity.NORMAL}
       keymode={Astal.Keymode.NONE}
-      // TOP|RIGHT のみ: サーフェスは popup の natural サイズに収まり、
-      // その外側はクリック吸い込みが起きない。Bar の下 / 画面右端からの
-      // 隙間は layer-shell margin で取る (CSS padding だとサーフェスが
-      // 膨らんで透明領域がクリックを吸ってしまう)。
+      // TOP|RIGHT only: the surface fits the popup's natural size,
+      // so clicks outside it aren't swallowed. The gap below the Bar / from the screen's
+      // right edge is taken via layer-shell margin (CSS padding would inflate the surface
+      // and the transparent area would swallow clicks).
       anchor={TOP | RIGHT}
       marginTop={38}
       marginRight={10}

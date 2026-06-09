@@ -10,7 +10,7 @@ import { createBinding, createComputed, createState } from "gnim"
 import { execAsync, subprocess, type Process } from "ags/process"
 
 // =============================================================================
-// シングルトン
+// Singleton
 // =============================================================================
 
 export const network = AstalNetwork.get_default()
@@ -23,16 +23,16 @@ export const battery = AstalBattery.get_default()
 // =============================================================================
 // Wifi
 //
-// AstalNetwork.Wifi のプロパティ更新が NM 側で起きた変化 (特に外部の nmcli
-// による切断) を即時 emit してくれない問題が実機で再現したので、
-// **nmcli 出力の自前ポーリングで状態を完全に作る** 方式に切り替えた。
+// AstalNetwork.Wifi doesn't immediately emit property updates for changes made on the NM
+// side (especially external disconnects via nmcli), reproduced on real hardware, so
+// we switched to **building the state entirely from our own polling of nmcli output**.
 //
-// 基本: 3 秒ごとに `nmcli` を叩いて結果を createState に流す。
-// WiFi サブメニューを開いた瞬間とアクション直後だけ即時 + 高頻度 (1.5s) に
-// 切り替えて反応速度を上げる。
+// Baseline: run `nmcli` every 3s and push the result into createState.
+// Only right when the Wi-Fi submenu opens and just after an action, switch to immediate +
+// high-frequency (1.5s) polling to improve responsiveness.
 // =============================================================================
 
-/** 自前で作る AP 型。AstalNetwork.AccessPoint と最低限互換: ssid / strength。 */
+/** Our own AP type. Minimally compatible with AstalNetwork.AccessPoint: ssid / strength. */
 export type WifiAp = {
   ssid: string
   bssid: string
@@ -40,11 +40,11 @@ export type WifiAp = {
   strength: number
   /** "WPA2/WPA3" / "WPA" / "WEP" / "Open" / "Unknown" */
   security: string
-  /** 現在この AP に接続しているか */
+  /** Whether we are currently connected to this AP */
   inUse: boolean
 }
 
-/** AstalNetwork.Internet とほぼ同じ意味の状態 enum。 */
+/** State enum with essentially the same meaning as AstalNetwork.Internet. */
 export const WifiInternet = {
   DISCONNECTED: 0,
   CONNECTING: 1,
@@ -68,7 +68,7 @@ export const wifiStrength = wifiStrengthState
 export const wifiScanning = wifiScanningState
 export const wifiAccessPoints = wifiApsState
 
-// ---- nmcli -t 出力 (フィールド区切り `:`, 値内 `:` は `\:` でエスケープ) のパース。
+// ---- Parse nmcli -t output (fields separated by `:`; a literal `:` in a value is escaped as `\:`).
 function splitNmcliFields(line: string): string[] {
   const fields: string[] = []
   let current = ""
@@ -106,7 +106,7 @@ export function accessPointSecurity(ap: WifiAp): string {
   return ap.security
 }
 
-// ---- 実ポーリング ----
+// ---- Actual polling ----
 let pollingIntervalMs = 3000
 let pollingTimeoutId: number | null = null
 let menuFocusCount = 0
@@ -136,7 +136,7 @@ async function pollWifiState(): Promise<void> {
       return
     }
 
-    // 2) device 状態から CONNECTED/CONNECTING を判定 + iface 確保
+    // 2) Determine CONNECTED/CONNECTING from device state + capture the iface
     let deviceState: string | null = null
     try {
       const out = await execAsync([
@@ -159,7 +159,7 @@ async function pollWifiState(): Promise<void> {
       // ignore
     }
 
-    // 3) AP リスト
+    // 3) AP list
     let activeSsid: string | null = null
     let activeStrength = 0
     let aps: WifiAp[] = []
@@ -193,7 +193,7 @@ async function pollWifiState(): Promise<void> {
           activeStrength = strength
         }
       }
-      // 同 SSID dedupe (in-use 優先 → 強度降順)
+      // Dedupe same SSID (prefer in-use, then by signal strength descending)
       const best = new Map<string, WifiAp>()
       for (const ap of aps) {
         const existing = best.get(ap.ssid)
@@ -216,7 +216,7 @@ async function pollWifiState(): Promise<void> {
     setWifiApsState(aps)
     setWifiSsidState(activeSsid)
     setWifiStrengthState(activeStrength)
-    // CONNECTING の判定: device state が "connecting" 系
+    // CONNECTING check: device state is a "connecting" variant
     if (deviceState && /connecting/i.test(deviceState)) {
       setWifiInternetState(WifiInternet.CONNECTING)
     } else if (activeSsid) {
@@ -243,15 +243,15 @@ function setPollIntervalAndStart(intervalMs: number) {
 }
 
 /**
- * Wi-Fi サブメニューが開いている間呼ぶことで poll interval を 1.5s に上げる。
- * 戻り値の関数を呼ぶと background interval (3s) に戻る。
+ * Call while the Wi-Fi submenu is open to raise the poll interval to 1.5s.
+ * Calling the returned function restores the background interval (3s).
  */
 export function focusWifiPolling(): () => void {
   menuFocusCount += 1
   if (menuFocusCount === 1) {
     setPollIntervalAndStart(1500)
   }
-  void pollWifiState() // 即時更新
+  void pollWifiState() // immediate update
   let released = false
   return () => {
     if (released) return
@@ -263,11 +263,11 @@ export function focusWifiPolling(): () => void {
   }
 }
 
-// 初期 poll + バックグラウンド 3s polling 開始
+// Initial poll + start background 3s polling
 setPollIntervalAndStart(3000)
 void pollWifiState()
 
-// ---- アクション ----
+// ---- Actions ----
 
 export function wifiIconName(): string {
   if (!wifiEnabled()) return "wifi-off"
@@ -291,20 +291,20 @@ export async function toggleWifi(): Promise<void> {
   return setWifiEnabled(!wifiEnabledState())
 }
 
-/** rescan を明示的に走らせ、scanning フラグを立てる。 */
+/** Explicitly run a rescan and set the scanning flag. */
 export async function triggerWifiScan(): Promise<void> {
   if (!wifiEnabledState()) return
   setWifiScanningState(true)
   try {
     await execAsync(["nmcli", "device", "wifi", "rescan"])
   } catch (err) {
-    // "Scan request failed: Scanning not allowed immediately" 系は無視。
+    // Ignore "Scan request failed: Scanning not allowed immediately" and similar.
     const msg = err instanceof Error ? err.message : String(err)
     if (!/not allowed|too soon/i.test(msg)) {
       console.error("[status] rescan failed:", err)
     }
   }
-  // 結果反映を少し待ってから poll し、scanning フラグを下ろす。
+  // Wait a bit for results to settle, then poll and clear the scanning flag.
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     void pollWifiState().then(() => setWifiScanningState(false))
     return GLib.SOURCE_REMOVE
@@ -347,7 +347,7 @@ export async function wifiConnect(
           : String(err)
     result = { ok: false, message, needsPassword: isPasswordError(message) }
   }
-  // 結果に関わらず短い間隔で 3 回再 poll して状態を確実に反映。
+  // Regardless of result, re-poll 3 times at a short interval to ensure the state is reflected.
   for (const delay of [200, 800, 1800]) {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
       void pollWifiState()
@@ -358,7 +358,7 @@ export async function wifiConnect(
 }
 
 /**
- * Wi-Fi デバイス自体を DISCONNECTED 状態にする (autoconnect 抑止)。
+ * Put the Wi-Fi device itself into the DISCONNECTED state (suppress autoconnect).
  */
 export async function wifiDisconnect(): Promise<void> {
   let iface: string | null = null
@@ -388,7 +388,7 @@ export async function wifiDisconnect(): Promise<void> {
     }
   }
 
-  // 即時 UI 反映 + 確実反映のため複数回 poll。
+  // Poll multiple times for immediate UI reflection + reliability.
   setWifiSsidState(null)
   setWifiInternetState(WifiInternet.DISCONNECTED)
   setWifiStrengthState(0)
@@ -403,19 +403,19 @@ export async function wifiDisconnect(): Promise<void> {
 // =============================================================================
 // Bluetooth
 //
-// AstalBluetooth (bluez D-Bus binding) ではなく、Wi-Fi と同じく
-// **bluetoothctl の自前ポーリング** で状態を作る。理由は Wi-Fi 同様、外部
-// 変更 (他クライアントが繋いだ / 切った) の取りこぼしを避けるため。
+// Not AstalBluetooth (the bluez D-Bus binding); like Wi-Fi, we build state from
+// **our own polling of bluetoothctl**. As with Wi-Fi, the reason is to avoid missing
+// external changes (another client connecting / disconnecting).
 //
-// 基本: 3 秒ごとに `bluetoothctl show` + `bluetoothctl devices [filter]` を
-// 叩いて結果を createState に流す。サブメニューを開いた瞬間とアクション直後
-// だけ即時 + 高頻度 (1.5s) に切り替える (focusBluetoothPolling)。
+// Baseline: every 3s run `bluetoothctl show` + `bluetoothctl devices [filter]`
+// and push the result into createState. Only right when the submenu opens and just
+// after an action, switch to immediate + high-frequency (1.5s) polling (focusBluetoothPolling).
 // =============================================================================
 
 export type BtDevice = {
-  /** "AA:BB:CC:DD:EE:FF" 形式 */
+  /** "AA:BB:CC:DD:EE:FF" format */
   mac: string
-  /** alias 優先 (空ならアドレスをそのまま) */
+  /** Prefer alias (fall back to the address when empty) */
   name: string
   paired: boolean
   trusted: boolean
@@ -430,7 +430,7 @@ export const bluetoothEnabled = btEnabledState
 export const bluetoothScanning = btScanningState
 export const bluetoothDevices = btDevicesState
 
-// 代表表示用: 接続中があればその名前、なければ On / Off
+// For the summary display: the connected device's name if any, otherwise On / Off
 export const bluetoothPrimary = createComputed(() => {
   if (!btEnabledState()) return "Off"
   const connected = btDevicesState().find((d) => d.connected)
@@ -438,7 +438,7 @@ export const bluetoothPrimary = createComputed(() => {
   return "On"
 })
 
-// ---- bluetoothctl 出力パース ----
+// ---- Parse bluetoothctl output ----
 
 function parseDevicesOutput(text: string): { mac: string; name: string }[] {
   const out: { mac: string; name: string }[] = []
@@ -457,7 +457,7 @@ function parseMacs(text: string): Set<string> {
   return new Set(parseDevicesOutput(text).map((d) => d.mac))
 }
 
-// ---- 実ポーリング ----
+// ---- Actual polling ----
 let btPollingIntervalMs = 3000
 let btPollingTimeoutId: number | null = null
 let btMenuFocusCount = 0
@@ -467,13 +467,13 @@ async function pollBluetoothState(): Promise<void> {
   if (btPollInFlight) return
   btPollInFlight = true
   try {
-    // 1) adapter 状態
+    // 1) Adapter state
     let showText = ""
     try {
       const out = await execAsync(["bluetoothctl", "show"])
       showText = typeof out === "string" ? out : ""
     } catch (err) {
-      // adapter が無いケース等。Off 扱いにする。
+      // Cases like no adapter present. Treat as Off.
       setBtEnabledState(false)
       setBtScanningState(false)
       setBtDevicesState([])
@@ -493,7 +493,7 @@ async function pollBluetoothState(): Promise<void> {
       return
     }
 
-    // 2) device リスト + フィルタ済みリストで paired / connected / trusted を判定
+    // 2) Determine paired / connected / trusted from the device list + filtered list
     const [allText, pairedText, connectedText, trustedText] = await Promise.all([
       execAsync(["bluetoothctl", "devices"]).catch(() => ""),
       execAsync(["bluetoothctl", "devices", "Paired"]).catch(() => ""),
@@ -543,15 +543,15 @@ function setBtPollIntervalAndStart(intervalMs: number) {
 }
 
 /**
- * Bluetooth サブメニュー表示中に呼ぶと poll を 1.5s に上げる。
- * 戻り値の関数で 3s に戻す。
+ * Call while the Bluetooth submenu is shown to raise polling to 1.5s.
+ * Use the returned function to restore 3s.
  */
 export function focusBluetoothPolling(): () => void {
   btMenuFocusCount += 1
   if (btMenuFocusCount === 1) {
     setBtPollIntervalAndStart(1500)
   }
-  void pollBluetoothState() // 即時更新
+  void pollBluetoothState() // immediate update
   let released = false
   return () => {
     if (released) return
@@ -563,34 +563,34 @@ export function focusBluetoothPolling(): () => void {
   }
 }
 
-// 初期 poll + バックグラウンド 3s polling
+// Initial poll + background 3s polling
 setBtPollIntervalAndStart(3000)
 void pollBluetoothState()
 
-// ---- ペアリング agent ----
+// ---- Pairing agent ----
 //
-// BlueZ は SSP (Secure Simple Pairing) の passkey 確認に **agent の登録** を
-// 要求する。agent が居ないと bluetoothd に
+// BlueZ requires **registering an agent** to confirm SSP (Secure Simple Pairing) passkeys.
+// Without an agent, bluetoothd emits
 //   `No agent available for request type 2`
 //   `device_confirm_passkey: Operation not permitted`
-// が出てペアリングがタイムアウトし、せっかく繋がっても数秒で
-// `org.bluez.Reason.Local Connection terminated by local host` で切られる。
+// and pairing times out; even if it connects, it gets dropped after a few seconds with
+// `org.bluez.Reason.Local Connection terminated by local host`.
 //
-// bluetoothctl 一発実行スタイルでは agent はそのプロセスの生存期間しか
-// 登録されないので、ここで **常駐 bluetoothctl** を起動して agent を維持する。
-// stdin が pipe で開きっぱなしなので bluetoothctl は EOF せずに動き続ける。
+// In one-shot bluetoothctl style the agent is only registered for that process's lifetime,
+// so we launch a **long-running bluetoothctl** here to keep the agent alive.
+// stdin stays open as a pipe, so bluetoothctl never hits EOF and keeps running.
 //
-// NoInputNoOutput = キーボードもディスプレイも無いデバイス用の capability。
-// 全 SSP 要求を自動で受諾する (= ユーザー操作不要)。本デスクトップ環境では
-// 我々がメニューで「接続」ボタンを押した時点でユーザー意図は表明されている
-// ので auto-accept でよい。
+// NoInputNoOutput = the capability for devices with neither keyboard nor display.
+// Auto-accepts all SSP requests (= no user interaction). In this desktop environment,
+// the user's intent is already expressed when they press the "Connect" button in the menu,
+// so auto-accept is fine.
 let btAgentProc: Process | null = null
 function startBluetoothAgent() {
   if (btAgentProc) return
   try {
     btAgentProc = subprocess(
       ["bluetoothctl", "--agent", "NoInputNoOutput"],
-      // 普段は何も出さない。診断したいときは console.log に差し替える。
+      // Normally output nothing. Swap in console.log when diagnosing.
       () => {},
       () => {},
     )
@@ -599,7 +599,7 @@ function startBluetoothAgent() {
         `[status] bluetooth agent exited (code=${code} signaled=${signaled}); restarting in 2s`,
       )
       btAgentProc = null
-      // 何らかの理由で死んだら 2 秒後に再起動 (連続失敗の暴走を防ぐ簡易リミット)。
+      // If it dies for any reason, restart after 2s (a simple limit to prevent runaway repeated failures).
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
         startBluetoothAgent()
         return GLib.SOURCE_REMOVE
@@ -611,7 +611,7 @@ function startBluetoothAgent() {
 }
 startBluetoothAgent()
 
-// ---- アクション ----
+// ---- Actions ----
 
 function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message || err.toString()
@@ -620,15 +620,15 @@ function errMessage(err: unknown): string {
 }
 
 async function tryUnblockBluetooth(): Promise<void> {
-  // BT は rfkill でソフト/ハードブロックされうる。ハードブロック (物理スイッチ等)
-  // はユーザー操作が必要なので何もできないが、ソフトブロックは `rfkill unblock`
-  // で外せる。off-blocked 状態だと bluetoothctl power on は org.bluez.Error.Failed
-  // を返してしまうのでここで先に解除する。
+  // BT can be soft/hard-blocked by rfkill. A hard block (e.g. a physical switch)
+  // needs user action so we can't help, but a soft block can be cleared with `rfkill unblock`.
+  // In an off-blocked state, bluetoothctl power on returns org.bluez.Error.Failed,
+  // so clear it first here.
   try {
     await execAsync(["rfkill", "unblock", "bluetooth"])
   } catch (err) {
-    // 失敗しても致命ではない (既に unblock 済みなら成功するはずで、本当に
-    // 失敗するのは権限不足など)。診断のためログだけ残す。
+    // Failure isn't fatal (it should succeed if already unblocked; real failures
+    // are things like insufficient permissions). Just log for diagnostics.
     console.error("[status] rfkill unblock bluetooth failed:", errMessage(err))
   }
 }
@@ -642,7 +642,7 @@ function waitMs(ms: number): Promise<void> {
   )
 }
 
-/** bluetoothctl show を 1 度叩いて Powered / PowerState 抜粋を返す。 */
+/** Run bluetoothctl show once and return the Powered / PowerState excerpt. */
 async function readBluetoothPower(): Promise<{
   powered: boolean
   transitional: boolean
@@ -651,7 +651,7 @@ async function readBluetoothPower(): Promise<{
     const out = await execAsync(["bluetoothctl", "show"])
     const text = typeof out === "string" ? out : ""
     const powered = /^\s*Powered:\s*yes/im.test(text)
-    // on-disabling / off-enabling は遷移中状態。stuck の検出に使う。
+    // on-disabling / off-enabling are transitional states. Used to detect stuck.
     const transitional =
       /^\s*PowerState:\s*(on-disabling|off-enabling)/im.test(text)
     return { powered, transitional }
@@ -660,7 +660,7 @@ async function readBluetoothPower(): Promise<{
   }
 }
 
-/** rfkill cycle で adapter を完全リセット (on-disabling 等の stuck から復旧)。 */
+/** Fully reset the adapter via an rfkill cycle (recover from stuck states like on-disabling). */
 async function rfkillResetBluetooth(): Promise<void> {
   await execAsync(["rfkill", "block", "bluetooth"]).catch((err) => {
     console.error("[status] rfkill block bluetooth failed:", errMessage(err))
@@ -676,8 +676,8 @@ export async function setBluetoothEnabled(enabled: boolean): Promise<void> {
   if (enabled) {
     await tryUnblockBluetooth()
 
-    // 直前の rfkill unblock 後など、ごく短時間 org.bluez.Error.Busy が返る
-    // ケースがあるので軽くリトライする。
+    // Right after an rfkill unblock, org.bluez.Error.Busy can be returned for a very short
+    // window, so retry lightly.
     let lastErr: unknown = null
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -692,8 +692,8 @@ export async function setBluetoothEnabled(enabled: boolean): Promise<void> {
       }
     }
 
-    // Busy / NotReady が解消しないときは adapter が on-disabling 等で stuck
-    // している可能性が高いので rfkill cycle で reset → 再 ON。
+    // If Busy / NotReady doesn't clear, the adapter is likely stuck in on-disabling etc.,
+    // so reset via an rfkill cycle, then turn it back ON.
     if (lastErr !== null) {
       const msg = errMessage(lastErr)
       console.error("[status] bluetoothctl power on failed:", msg)
@@ -711,19 +711,19 @@ export async function setBluetoothEnabled(enabled: boolean): Promise<void> {
       }
     }
   } else {
-    // まず正攻法で power off。
+    // First, the normal power off.
     try {
       await execAsync(["bluetoothctl", "power", "off"])
     } catch (err) {
-      // Busy 等。続行して下でフォールバックを試す。
+      // Busy etc. Continue and try the fallback below.
       const msg = errMessage(err)
       if (!/Busy/i.test(msg)) {
         console.error("[status] bluetoothctl power off failed:", msg)
       }
     }
 
-    // 1.5 秒待って実 state を確認し、まだ off に到達していなければ
-    // rfkill block で kernel レベルで強制 off にする (on-disabling stuck 救済)。
+    // Wait 1.5s and check the real state; if it hasn't reached off yet,
+    // force it off at the kernel level via rfkill block (rescue from on-disabling stuck).
     await waitMs(1500)
     const state = await readBluetoothPower()
     if (state.powered || state.transitional) {
@@ -738,7 +738,7 @@ export async function setBluetoothEnabled(enabled: boolean): Promise<void> {
     }
   }
 
-  // 状態反映を確認する poll を複数回スケジュール。
+  // Schedule multiple polls to confirm the state was reflected.
   for (const delay of [150, 600, 1500, 3000]) {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
       void pollBluetoothState()
@@ -752,20 +752,20 @@ export async function toggleBluetooth(): Promise<void> {
 }
 
 /**
- * scan を 15 秒間 (bluetoothctl の --timeout 機能) 走らせる。
- * fire-and-forget で実行: bluetoothctl は --timeout 経過まで生き続けるので
- * await はせず、poll で Discovering: yes/no を観測する。
+ * Run a scan for 15 seconds (bluetoothctl's --timeout feature).
+ * Fire-and-forget: bluetoothctl stays alive until --timeout elapses, so
+ * don't await; observe Discovering: yes/no via polling.
  *
- * UI 反応性のため、既に scanning 中の再 click でも単純に skip せず、
- * 実 adapter 側の Discovering 状態を見て本当に動いているか確認する。
- * (optimistic flag が古いまま stuck することがあるため。)
+ * For UI responsiveness, don't simply skip a re-click while already scanning;
+ * check the adapter's real Discovering state to see whether it's actually running.
+ * (because the optimistic flag can get stuck stale.)
  */
 export async function triggerBluetoothScan(): Promise<void> {
   if (!btEnabledState()) return
-  // optimistic flag を立てる前に実 state を確認: 既に Discovering:yes なら
-  // 重複起動を避けつつ flag を真値に揃える。Discovering:no なのに flag が
-  // 立っているのは stuck なので、ここで flag を一度クリアして再 trigger できる
-  // ようにする。
+  // Check the real state before setting the optimistic flag: if already Discovering:yes,
+  // avoid a duplicate start while aligning the flag to the true value. If the flag is set
+  // despite Discovering:no, that's stuck, so clear the flag here so it can be
+  // re-triggered.
   const state = await readBluetoothPower()
   if (!state.powered) return
 
@@ -773,7 +773,7 @@ export async function triggerBluetoothScan(): Promise<void> {
   void execAsync(["bluetoothctl", "--timeout", "15", "scan", "on"]).catch(
     (err) => {
       const msg = errMessage(err)
-      // "Already discovering" は無視できる
+      // "Already discovering" can be ignored
       if (!/Already|discovering/i.test(msg)) {
         console.error("[status] bluetoothctl scan on failed:", msg)
       }
@@ -792,7 +792,7 @@ export interface BluetoothConnectResult {
   message?: string
 }
 
-/** bluetoothctl info <mac> の Connected: フィールドを真値で取得。 */
+/** Get the true value of the Connected: field from bluetoothctl info <mac>. */
 async function isDeviceConnected(mac: string): Promise<boolean> {
   try {
     const out = await execAsync(["bluetoothctl", "info", mac])
@@ -813,15 +813,15 @@ function scheduleBluetoothRepoll() {
 }
 
 /**
- * デバイスへ接続。未 paired ならまず pair → trust してから connect。
+ * Connect to a device. If not paired, pair -> trust first, then connect.
  *
- * 注意: Classic BT (BR/EDR) の場合 `bluetoothctl pair` の段階で
- * 接続まで自動で完了する。そのまま `bluetoothctl connect` を呼ぶと
- * `org.bluez.Error.Failed br-connection-unknown` などで失敗扱いに
- * なるが、実 state では Connected: yes なので、各 step で失敗を
- * 拾ったら必ず info を見て **実際の接続状態** を優先的に判定する。
+ * Note: for Classic BT (BR/EDR), the `bluetoothctl pair` step already
+ * completes the connection automatically. Calling `bluetoothctl connect` then
+ * fails with e.g. `org.bluez.Error.Failed br-connection-unknown`,
+ * but the real state is Connected: yes, so whenever a step reports failure,
+ * always check info and judge by the **actual connection state**.
  *
- * PIN が必要な場合は bluez の system agent (gnome-shell 等) が出てくる。
+ * When a PIN is required, bluez's system agent (gnome-shell etc.) takes over.
  */
 export async function bluetoothConnect(
   mac: string,
@@ -836,12 +836,12 @@ export async function bluetoothConnect(
     } catch (err) {
       pairErr = err
     }
-    // pair の成功失敗に関わらず、実 state が Connected: yes ならその時点で成功扱い。
+    // Regardless of pair success/failure, if the real state is Connected: yes, treat it as success.
     if (await isDeviceConnected(mac)) {
       try {
         await execAsync(["bluetoothctl", "trust", mac])
       } catch {
-        // trust 失敗は致命ではない
+        // trust failure isn't fatal
       }
       scheduleBluetoothRepoll()
       return { ok: true }
@@ -850,11 +850,11 @@ export async function bluetoothConnect(
       scheduleBluetoothRepoll()
       return { ok: false, message: errMessage(pairErr) }
     }
-    // pair は成功したが connected ではない (これから明示的 connect が要る)
+    // pair succeeded but not connected (an explicit connect is still needed)
     try {
       await execAsync(["bluetoothctl", "trust", mac])
     } catch {
-      // trust 失敗は致命ではない
+      // trust failure isn't fatal
     }
   }
 
@@ -863,8 +863,8 @@ export async function bluetoothConnect(
     scheduleBluetoothRepoll()
     return { ok: true }
   } catch (err) {
-    // connect が失敗を返しても実 state が Connected: yes なら成功扱い
-    // (Classic BT の二重 connect で br-connection-unknown が出るケース)。
+    // Even if connect returns failure, treat Connected: yes in the real state as success
+    // (the Classic BT double-connect br-connection-unknown case).
     if (await isDeviceConnected(mac)) {
       scheduleBluetoothRepoll()
       return { ok: true }
@@ -968,11 +968,11 @@ export function dismissAllNotifications() {
 // =============================================================================
 // Audio (volume)
 //
-// createBinding(audio, "defaultSpeaker") は default_speaker の入替えしか拾わ
-// ないため、speaker.volume / speaker.mute の変化はそのままでは反映されない。
-// 起動直後に PulseAudio がまだ準備できていない場合、speaker は存在しても
-// volume が 0 のまま読まれてしまう問題もあるため、speaker に対する
-// notify::volume / notify::mute を直接 listen して reactive state に流す。
+// createBinding(audio, "defaultSpeaker") only picks up replacement of default_speaker,
+// so changes to speaker.volume / speaker.mute aren't reflected on their own.
+// If PulseAudio isn't ready right after startup, the speaker may exist but its
+// volume can be read as 0, so we directly listen to the speaker's
+// notify::volume / notify::mute and push into reactive state.
 // =============================================================================
 
 const [speakerVolumeState, setSpeakerVolumeState] = createState(0)
@@ -1037,7 +1037,7 @@ export function volumeIconName(): string {
 }
 
 // =============================================================================
-// Brightness (brightnessctl 経由 — Astal に backend lib が無い)
+// Brightness (via brightnessctl — Astal has no backend lib for it)
 // =============================================================================
 
 const BACKLIGHT_PATH = "/sys/class/backlight"
@@ -1078,10 +1078,10 @@ const [brightnessState, setBrightnessState] = createState(
 )
 export const brightness = brightnessState
 
-// 値を直接書く時は brightnessctl で。読み戻しは 500ms polling。
+// Write values directly via brightnessctl. Read back via 500ms polling.
 let lastWrittenAt = 0
 function pollBrightness() {
-  // 直前に書き込んだ直後は OS 反映待ちでブレるので skip
+  // Right after a write, skip while the OS catches up (avoids flicker)
   if (Date.now() - lastWrittenAt < 1000) return
   const value = readBacklightValue("brightness") / maxBrightness
   if (Math.abs(value - brightnessState()) > 0.005) {
@@ -1110,10 +1110,10 @@ export function brightnessAvailable(): boolean {
 // =============================================================================
 // Mpris (media player)
 //
-// Player の title / artist / art_url / playback_status は GObject の
-// notify::<prop> として emit される。createComputed で playersState を見るだけ
-// だと list の入替えしか拾えないので、現在の primary player に対して個別の
-// notify::* を listen し、reactive state に流す。
+// A Player's title / artist / art_url / playback_status are emitted as GObject
+// notify::<prop>. Just watching playersState via createComputed only picks up
+// list replacement, so for the current primary player we individually
+// listen to notify::* and push into reactive state.
 // =============================================================================
 
 const [playersState, setPlayersState] = createState<AstalMpris.Player[]>([])
@@ -1121,7 +1121,7 @@ export const mprisPlayers = playersState
 
 const [primaryPlayerState, setPrimaryPlayerState] =
   createState<AstalMpris.Player | null>(null)
-/** 操作 (play_pause / next / previous) のために生 Player を保持。 */
+/** Hold the raw Player for operations (play_pause / next / previous). */
 export const primaryPlayer = primaryPlayerState
 
 const [mediaTitleState, setMediaTitleState] = createState<string>("")
@@ -1222,9 +1222,9 @@ mpris.connect("player-added", refreshPlayers)
 mpris.connect("player-closed", refreshPlayers)
 refreshPlayers()
 
-// 再生中ステータスが変わったら primary も切替え(複数プレーヤーが立ってる時用)。
-// playback-status は player ごとの notify なので、再 evaluate を周期的に行う
-// だけでよい。1 秒に 1 度 pickPrimary を見直す。
+// When playback status changes, re-pick primary too (for when multiple players exist).
+// playback-status is a per-player notify, so periodically re-evaluating is
+// enough. Re-check pickPrimary once per second.
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
   const next = pickPrimaryPlayer()
   if (next !== currentPlayer) bindPlayer(next)
@@ -1243,8 +1243,8 @@ export function formatMprisTime(seconds: number): string {
 }
 
 // =============================================================================
-// Battery (AstalBattery — upower D-Bus 越し。プロパティ更新は安定して
-// notify が来るので Wi-Fi のような自前ポーリングは不要)
+// Battery (AstalBattery — over upower D-Bus. Property updates arrive reliably
+// as notify, so self-polling like Wi-Fi isn't needed)
 // =============================================================================
 
 export const batteryPresent = createBinding(battery, "isPresent")
@@ -1257,10 +1257,10 @@ export const batteryEnergyRate = createBinding(battery, "energyRate")
 export const batteryChargeCycles = createBinding(battery, "chargeCycles")
 export const batteryTemperature = createBinding(battery, "temperature")
 
-/** 残量(0..1) + state を見て表示用 SVG ファイル名を返す。
- * AC 接続中 (CHARGING / PENDING_CHARGE / FULLY_CHARGED) は常に
- * battery-charging を出す。`batteryCharging` 派生プロパティは
- * PENDING_CHARGE のとき false になるので state を直接見る。 */
+/** Return the display SVG filename based on charge (0..1) + state.
+ * While on AC (CHARGING / PENDING_CHARGE / FULLY_CHARGED), always
+ * show battery-charging. The `batteryCharging` derived property is
+ * false for PENDING_CHARGE, so look at state directly. */
 export function batteryIconName(): string {
   const s = batteryState()
   if (
@@ -1277,7 +1277,7 @@ export function batteryIconName(): string {
   return "battery-very-low"
 }
 
-/** upower の State enum を人が読める文字列に。 */
+/** Convert upower's State enum to a human-readable string. */
 export function batteryStateLabel(): string {
   switch (batteryState()) {
     case AstalBattery.State.CHARGING:
@@ -1297,7 +1297,7 @@ export function batteryStateLabel(): string {
   }
 }
 
-/** "1h 23m" 形式に整形 (0 → "—")。 */
+/** Format as "1h 23m" (0 -> "—"). */
 export function formatBatteryDuration(seconds: number): string {
   if (!isFinite(seconds) || seconds <= 0) return "—"
   const total = Math.floor(seconds)

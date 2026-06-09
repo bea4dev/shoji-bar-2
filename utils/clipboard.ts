@@ -2,11 +2,11 @@ import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 
-// cliphist によるクリップボード履歴の取得・復元・サムネイル生成。
-// Astal にクリップボード機能は無いため CLI(cliphist + wl-copy + magick)を使う。
-//   一覧:   cliphist list        → "<id>\t<preview>"
-//   復元:   cliphist decode <id> | wl-copy
-//   画像:   preview が "[[ binary data <size> <type> <WxH> ]]"
+// Clipboard history listing / restore / thumbnail generation via cliphist.
+// Astal has no clipboard module, so use CLIs (cliphist + wl-copy + magick).
+//   list:    cliphist list        -> "<id>\t<preview>"
+//   restore: cliphist decode <id> | wl-copy
+//   image:   preview is "[[ binary data <size> <type> <WxH> ]]"
 
 export type ClipEntry = {
   id: string
@@ -17,7 +17,7 @@ export type ClipEntry = {
 }
 
 const THUMB_DIR = `${GLib.get_tmp_dir()}/shoji-bar-2-clip`
-// 例: [[ binary data 378 KiB png 1087x1393 ]]
+// e.g. [[ binary data 378 KiB png 1087x1393 ]]
 const IMAGE_PREVIEW =
   /^\[\[\s*binary data\s+.*?\b(png|jpe?g|gif|bmp|webp|tiff?|svg)\b\s+(\d+x\d+)/i
 
@@ -56,13 +56,13 @@ export async function listClipboard(): Promise<ClipEntry[]> {
   return entries
 }
 
-// 選択エントリをデコードしてクリップボードへ戻す。id は数字のみ検証済み。
+// Decode the selected entry back onto the clipboard. id is already validated as digits-only.
 export function copyEntry(id: string): Promise<string> {
   return execAsync(["bash", "-c", `cliphist decode ${id} | wl-copy`])
 }
 
-// 画像エントリを高さ固定の小さな PNG サムネイルにして、そのパスを返す。
-// 既に生成済みならデコードし直さない。
+// Turn an image entry into a small fixed-height PNG thumbnail and return its path.
+// Skip re-decoding if it was already generated.
 export async function ensureThumbnail(entry: ClipEntry): Promise<string | null> {
   if (!entry.isImage) {
     return null

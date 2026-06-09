@@ -13,15 +13,15 @@ type ClockMenuState = {
 
 const LAYER_STATE = new LayerState<ClockMenuState>()
 
-// 1 秒ごとに更新される現在時刻。全モニタで共有する
+// Current time, updated every second. Shared across all monitors
 const now = createPoll(GLib.DateTime.new_now_local(), 1000, () =>
   GLib.DateTime.new_now_local(),
 )
 
-// 日本語環境かどうか。日本語なら日本語表記、それ以外は英語表記にする
+// Whether the locale is Japanese. Use Japanese formatting if so, English otherwise
 const IS_JP = GLib.get_language_names()[0].toLowerCase().startsWith("ja")
 
-// get_day_of_week(): 1=月 ... 7=日
+// get_day_of_week(): 1=Mon ... 7=Sun
 const WEEKDAYS_JP = ["月", "火", "水", "木", "金", "土", "日"]
 const WEEKDAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const WEEKDAYS_EN_FULL = [
@@ -33,7 +33,7 @@ const WEEKDAYS_EN_FULL = [
   "Saturday",
   "Sunday",
 ]
-// get_month(): 1=1月 ... 12=12月
+// get_month(): 1=January ... 12=December
 const MONTHS_EN = [
   "January",
   "February",
@@ -49,13 +49,13 @@ const MONTHS_EN = [
   "December",
 ]
 
-// ロケールに応じた曜日(短縮)。例: 金 / Fri
+// Locale-aware short weekday name (e.g. Fri, or localized in a Japanese locale).
 function weekday(dt: GLib.DateTime): string {
   const i = dt.get_day_of_week() - 1
   return IS_JP ? WEEKDAYS_JP[i] : WEEKDAYS_EN[i]
 }
 
-// ロケールに応じた日付。例: 2026年6月5日 (金) / Friday, June 5, 2026
+// Locale-aware date (e.g. Friday, June 5, 2026, or the Japanese form in a JP locale).
 function dateLabel(dt: GLib.DateTime): string {
   if (IS_JP) {
     return `${dt.get_year()}年${dt.get_month()}月${dt.get_day_of_month()}日 (${WEEKDAYS_JP[dt.get_day_of_week() - 1]})`
@@ -63,7 +63,7 @@ function dateLabel(dt: GLib.DateTime): string {
   return `${WEEKDAYS_EN_FULL[dt.get_day_of_week() - 1]}, ${MONTHS_EN[dt.get_month() - 1]} ${dt.get_day_of_month()}, ${dt.get_year()}`
 }
 
-// 例: Asia/Tokyo · JST (UTC+09:00)
+// e.g. Asia/Tokyo · JST (UTC+09:00)
 function timezoneLabel(dt: GLib.DateTime): string {
   const identifier = dt.get_timezone().get_identifier()
   return `${identifier} · ${dt.format("%Z")} (UTC${dt.format("%:z")})`
@@ -115,8 +115,8 @@ export function ClockMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     if (open) {
       setMounted(true)
 
-      // mounted=true の反映後に open class を付ける
-      // これを分けないと transition が発火しないことがある
+      // Add the open class after mounted=true takes effect
+      // Splitting these is needed or the transition sometimes doesn't fire
       openIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         openIdleId = null
         setIsOpen(true)
@@ -125,7 +125,7 @@ export function ClockMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     } else {
       setIsOpen(false)
 
-      // CSS transition の終了後に window を消す
+      // Remove the window after the CSS transition finishes
       closeTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
         closeTimeoutId = null
 
@@ -155,10 +155,10 @@ export function ClockMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       halign={Gtk.Align.CENTER}
       valign={Gtk.Align.START}
     >
-      {/* バー直下に潜り込ませる分の余白(StartMenu の FirstPadding と同様) */}
+      {/* Padding so it can tuck under the bar (same as StartMenu's FirstPadding) */}
       <box cssName="FirstPadding" />
 
-      {/* 上の島: 年月日/曜日 + 時計 + タイムゾーン */}
+      {/* Top island: date/weekday + clock + timezone */}
       <box
         cssName="ClockIsland"
         orientation={Gtk.Orientation.VERTICAL}
@@ -182,7 +182,7 @@ export function ClockMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         />
       </box>
 
-      {/* 下の島: カレンダー */}
+      {/* Bottom island: calendar */}
       <box
         cssName="CalendarIsland"
         orientation={Gtk.Orientation.VERTICAL}

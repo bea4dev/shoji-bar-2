@@ -1,12 +1,12 @@
 import { Gtk } from "ags/gtk4"
 
-// (x, y) は root（ジェスチャを付けた widget）の座標系で渡される。
-// widget.contains() は「その widget のローカル座標」を期待するため、
-// halign=CENTER や transform で位置がずれていると座標系が合わず誤判定する。
+// (x, y) are in the coordinate space of root (the widget the gesture is attached to).
+// widget.contains() expects coordinates in that widget's own local space, so
+// if it is shifted by halign=CENTER or a transform, the spaces don't match and it misjudges.
 //
-// 代わりに GTK 本来のヒットテスト pick() を使い、クリック位置にある widget が
-// target（またはその子孫）かどうかを祖先方向に辿って判定する。
-// これなら中央寄せや CSS transform があっても正しく内外を判定できる。
+// Instead, use GTK's own hit-test pick(): take the widget at the click position and
+// walk up its ancestors to decide whether it is target (or a descendant of it).
+// This judges inside/outside correctly even with centering or CSS transforms.
 export function isPointInsideWidget(
   root: Gtk.Widget,
   target: Gtk.Widget,

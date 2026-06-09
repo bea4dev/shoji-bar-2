@@ -15,7 +15,7 @@ export function Workspaces({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     }
   }
 
-  // スクロールで隣のワークスペースへ(下=次, 上=前)。1 未満には行かない。
+  // Scroll to the adjacent workspace (down = next, up = prev). Never go below 1.
   const scroll = Gtk.EventControllerScroll.new(
     Gtk.EventControllerScrollFlags.VERTICAL |
       Gtk.EventControllerScrollFlags.DISCRETE,
@@ -41,7 +41,7 @@ export function Workspaces({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     >
       <For each={workspaces} id={(workspace: WsWorkspace) => workspace.index}>
         {(workspace: WsWorkspace) => {
-          // index は安定キー。表示状態は monitor() から都度引いてリアクティブにする
+          // index is the stable key; read display state from monitor() each time to stay reactive
           const index = workspace.index
           const live = createComputed(
             () =>

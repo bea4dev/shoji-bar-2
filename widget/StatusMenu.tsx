@@ -69,13 +69,13 @@ const LAYER_STATE = new LayerState<StatusMenuState>()
 type Submenu = "wifi" | "bluetooth" | "ppd" | "notifications"
 
 // =============================================================================
-// バー上のトリガーボタン: 主要 7 ステータスのアイコンを横並びで表示
+// Trigger button on the bar: shows the 7 main status icons in a row
 // =============================================================================
 export function StatusButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
-  // menu 開いている間はボタン全体が accent 色になるので、白アイコンだと
-  // 見えない。pressed 中は -dark 版に差し替える。
-  // LayerState.then は state 未登録時に undefined を返すので、その場合は
-  // 常に false 扱い (= 非 pressed = 白アイコン)。
+  // While the menu is open the whole button turns accent-colored, so white icons
+  // are hard to see. Swap to the -dark variant while pressed.
+  // LayerState.then returns undefined when no state is registered; in that case
+  // always treat it as false (= not pressed = white icon).
   const isPressed: Accessor<boolean> =
     LAYER_STATE.then(gdkmonitor, (state) =>
       state.isOpen((isOpen) => isOpen),
@@ -107,7 +107,7 @@ export function StatusButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         />
         <image
           cssName="StatusButtonIcon"
-          // BT が off のときはアイコン自体を消して on/off の判別を付ける。
+          // When BT is off, hide the icon itself to distinguish on/off.
           visible={bluetoothEnabled}
           file={suffix("bluetooth")}
           pixelSize={14}
@@ -153,12 +153,12 @@ export function StatusButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 }
 
 // =============================================================================
-// メニュー本体
+// The menu itself
 // =============================================================================
 export function StatusMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const [isOpen, setIsOpen] = createState(false)
   const [mounted, setMounted] = createState(false)
-  // 開いた直後は通知タブ。再オープン時もデフォルトに戻す。
+  // Default to the notifications tab right after opening; reset to default on reopen too.
   const [activeSubmenu, setActiveSubmenu] =
     createState<Submenu>("notifications")
 
@@ -208,8 +208,8 @@ export function StatusMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       orientation={Gtk.Orientation.VERTICAL}
       halign={Gtk.Align.END}
       valign={Gtk.Align.START}
-      // widget level でも size を固定。CSS の min-height だけでは
-      // 子の natural が小さい場合に縮むケースがあるため両方で押さえる。
+      // Also fix the size at the widget level. CSS min-height alone
+      // can shrink when a child's natural size is small, so enforce it on both.
       widthRequest={380}
       heightRequest={620}
     >
@@ -260,7 +260,7 @@ export function StatusMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 }
 
 // =============================================================================
-// 上部: 2x2 quick toggles + サブメニュー
+// Top: 2x2 quick toggles + submenu
 // =============================================================================
 function QuickIsland(
   activeSubmenu: Accessor<Submenu>,
@@ -282,7 +282,7 @@ function QuickIsland(
           return cls.join(" ")
         })}
         onClicked={() => {
-          // 同じものをクリックしたら閉じずに維持(常にどれか開く設計)
+          // Clicking the same one keeps it open (by design, one is always open)
           setActiveSubmenu(key)
         }}
       >
@@ -310,8 +310,8 @@ function QuickIsland(
     ) as Gtk.Widget
   }
 
-  // QuickButton 内のアイコンは active 時に dark テーマ (アクセントカラー背景)
-  // 上に乗る前提なので、白では見えにくい。専用の -dark.svg を使う。
+  // Icons inside QuickButton sit on a dark theme (accent-colored background) when active,
+  // so white is hard to see. Use the dedicated -dark.svg.
   const wifiBtn = quickButton(
     "wifi",
     createComputed(() => {
@@ -370,15 +370,15 @@ function QuickIsland(
   ) as Gtk.Widget
 }
 
-// サブメニュー領域: スクロール可能 + 固定高
+// Submenu area: scrollable + fixed height
 function Submenu(activeSubmenu: Accessor<Submenu>): Gtk.Widget {
   return (
     <scrolledwindow
       cssName="SubmenuScroll"
       hscrollbarPolicy={Gtk.PolicyType.NEVER}
       vscrollbarPolicy={Gtk.PolicyType.AUTOMATIC}
-      // overlay にすると scrollbar が内容に被って hover 干渉する。
-      // false にして scrollbar に専用の列を割り当てる。
+      // With overlay the scrollbar overlaps the content and interferes with hover.
+      // Set it to false so the scrollbar gets its own column.
       overlayScrolling={false}
       heightRequest={200}
     >
@@ -427,7 +427,7 @@ function buildSubmenuContent(sub: Submenu): Gtk.Widget {
 
 // =============================================================================
 // Wi-Fi submenu
-// 3 つの内部モード(リスト / パスワード入力 / 接続中)を 1 つのコンテナ内で切替。
+// Switch between three internal modes (list / password entry / connecting) within one container.
 // =============================================================================
 
 type WifiView =
@@ -444,16 +444,16 @@ type WifiView =
 function wifiSubmenu(): Gtk.Widget {
   const [wifiView, setWifiView] = createState<WifiView>({ kind: "list" })
 
-  // 表示中は polling 頻度を上げる。submenu unmount 時に release を呼んで戻す。
+  // Raise the polling frequency while shown. Call release on submenu unmount to restore.
   const releaseFocus = focusWifiPolling()
   onCleanup(releaseFocus)
 
-  // 表示時に rescan を促す
+  // Trigger a rescan when shown
   void triggerWifiScan()
 
-  // ON/OFF トグル行 (Gtk.Switch)。active を wifiEnabled に bind しつつ、
-  // 外部要因(polling) で active が変わって notify::active が fire しても
-  // 望み(desired)===現在(current) なら何もしないことで再帰呼び出しを防ぐ。
+  // ON/OFF toggle row (Gtk.Switch). Bind active to wifiEnabled, but
+  // even if active changes due to an external factor (polling) and notify::active fires,
+  // do nothing when desired === current, preventing recursive calls.
   const toggleRow = (
     <box cssName="WifiToggleRow" spacing={6}>
       <label
@@ -476,9 +476,9 @@ function wifiSubmenu(): Gtk.Widget {
     </box>
   ) as Gtk.Widget
 
-  // 操作行: rescan / disconnect。
-  // Rescan は scanning 中はラベル切替 + disabled。
-  // Disconnect は接続中以外は disabled。
+  // Action row: rescan / disconnect.
+  // Rescan: label changes + disabled while scanning.
+  // Disconnect: disabled unless connected.
   const actionsRow = (
     <box cssName="WifiActionsRow" spacing={6} halign={Gtk.Align.END}>
       <button
@@ -502,7 +502,7 @@ function wifiSubmenu(): Gtk.Widget {
     </box>
   ) as Gtk.Widget
 
-  // 切替コンテンツ部
+  // Switchable content area
   const content = (
     <box
       cssName="WifiContent"
@@ -587,8 +587,8 @@ function buildWifiList(setWifiView: (v: WifiView) => void): Gtk.Widget {
   const currentSsid = wifiSsid()
 
   for (const ap of aps) {
-    // AP は scan の合間に GC される可能性があるので、UI に必要な値は snapshot し、
-    // クリック時は SSID で AP を取り直す。クロージャは ap を直接保持しない。
+    // APs may be GC'd between scans, so snapshot the values the UI needs, and
+    // re-fetch the AP by SSID on click. The closure doesn't hold ap directly.
     let ssid: string | null = null
     let strength = 0
     let requiresPw = false
@@ -615,8 +615,8 @@ function buildWifiList(setWifiView: (v: WifiView) => void): Gtk.Widget {
               wifiDisconnect()
               return
             }
-            // 既知/オープンを期待してまず password 無しで activate。
-            // 失敗時に needsPassword で password モードへ。
+            // Expecting known/open, first activate without a password.
+            // On failure, go to password mode via needsPassword.
             if (!requiresPw) {
               setWifiView({ kind: "connecting", ssid: ssidValue })
               wifiConnect(ssidValue).then((res) => {
@@ -633,7 +633,7 @@ function buildWifiList(setWifiView: (v: WifiView) => void): Gtk.Widget {
                 }
               })
             } else {
-              // 暗号化ありはまず password 無しを試して、保存済みならそのまま繋がる
+              // For encrypted networks, try without a password first; if saved, it just connects
               setWifiView({ kind: "connecting", ssid: ssidValue })
               wifiConnect(ssidValue).then((res) => {
                 if (res.ok) {
@@ -811,14 +811,14 @@ type BtView =
 function bluetoothSubmenu(): Gtk.Widget {
   const [btView, setBtView] = createState<BtView>({ kind: "list" })
 
-  // 表示中は polling 頻度を上げる。
+  // Raise the polling frequency while shown.
   const releaseFocus = focusBluetoothPolling()
   onCleanup(releaseFocus)
 
-  // 表示時にスキャンを開始 (現在 off / 既にスキャン中なら no-op)。
+  // Start a scan when shown (no-op if currently off / already scanning).
   void triggerBluetoothScan()
 
-  // ON/OFF トグル。Wifi と同じ class 名で同一スタイルを共有。
+  // ON/OFF toggle. Shares the same style via the same class name as Wifi.
   const toggleRow = (
     <box cssName="WifiToggleRow" spacing={6}>
       <label
@@ -841,7 +841,7 @@ function bluetoothSubmenu(): Gtk.Widget {
     </box>
   ) as Gtk.Widget
 
-  // 操作行: rescan のみ (BT は同時複数接続を許すので global disconnect は出さない)。
+  // Action row: rescan only (BT allows multiple simultaneous connections, so no global disconnect).
   const actionsRow = (
     <box cssName="WifiActionsRow" spacing={6} halign={Gtk.Align.END}>
       <button
@@ -1127,24 +1127,24 @@ function notificationsSubmenu(): Gtk.Widget {
     <box cssName="SubmenuList" orientation={Gtk.Orientation.VERTICAL} spacing={2} />
   ) as Gtk.Box
 
-  // Gtk.Revealer でラップして高さ折りたたみ、CSS で translateX + opacity を
-  // 担当させる。両者を並列に走らせると Revealer の SLIDE_DOWN が支配的に
-  // なって CSS transition が見えなくなるので、**順序を逐次化**する:
-  //   enter: Revealer 展開 → 完了後に entering クラス除去 (CSS slide-in)
-  //   leave: leaving クラス追加 (CSS slide-out) → 完了後に Revealer 折りたたみ
-  //          → 完了後に DOM 削除
+  // Wrap in Gtk.Revealer for height collapse, and let CSS handle translateX + opacity.
+  // Running both in parallel lets the Revealer's SLIDE_DOWN dominate and
+  // hide the CSS transition, so **serialize the order**:
+  //   enter: expand Revealer -> after it completes, remove the entering class (CSS slide-in)
+  //   leave: add the leaving class (CSS slide-out) -> after it completes, collapse the Revealer
+  //          -> remove from the DOM after it completes
   //
-  // 動作中の状態変化に強くするため id ごとに token を発行し、各非同期 step
-  // は実行直前に「自分の token がまだ最新か」を確認してから進める。新しい
-  // 動作 (例: enter 中に dismiss) で token が更新されると古い callback は
-  // 単に no-op する。
+  // To be robust against state changes mid-animation, issue a token per id, and each async step
+  // checks "is my token still the latest?" right before proceeding. When a new
+  // action (e.g. dismiss during enter) updates the token, the old callback
+  // simply no-ops.
   const NOTIF_ANIM_MS = 240
   const revealerById = new Map<number, Gtk.Revealer>()
   const animTokenById = new Map<number, number>()
-  // 各 revealer (= notif row JSX) 専用の reactive scope の dispose。
-  // JSX 構築中に onClicked などが内部で onCleanup を呼ぶため、createRoot で
-  // tracking context を張る必要がある (reconcile は subscribe callback 経由
-  // で呼ばれるので、ここの外側には active な scope が無い)。
+  // Dispose of the reactive scope dedicated to each revealer (= notif row JSX).
+  // onClicked etc. call onCleanup internally during JSX construction, so we establish a
+  // tracking context with createRoot (reconcile is called via the subscribe
+  // callback, so there's no active scope outside here).
   const disposeById = new Map<number, () => void>()
   let tokenCounter = 0
   let emptyLabel: Gtk.Widget | null = null
@@ -1174,9 +1174,9 @@ function notificationsSubmenu(): Gtk.Widget {
     const row = notificationRow(n)
     row.add_css_class("entering")
     const revealer = new Gtk.Revealer({
-      // SLIDE_DOWN: Revealer 自身の allocation が 0 → 自然高さに animate するので
-      // 周りの行が自然に上下にずれる。CROSSFADE では opacity だけで高さ変化が
-      // 起きず、新規追加/削除に合わせた slide が起きなかった。
+      // SLIDE_DOWN: the Revealer's own allocation animates from 0 -> natural height, so
+      // surrounding rows shift up/down naturally. With CROSSFADE only opacity changes, no height,
+      // so the slide on add/remove didn't happen.
       transitionType: Gtk.RevealerTransitionType.SLIDE_DOWN,
       transitionDuration: NOTIF_ANIM_MS,
       revealChild: false,
@@ -1189,15 +1189,15 @@ function notificationsSubmenu(): Gtk.Widget {
     const token = bumpToken(id)
     const child = revealer.get_child()
     if (child) {
-      // 万一 leaving 状態だったら戻す。entering は createRevealerForNotif で既に付与済。
+      // In case it was in the leaving state, revert it. entering is already set by createRevealerForNotif.
       child.remove_css_class("leaving")
       child.add_css_class("entering")
     }
-    // Phase 1: Revealer 展開 (高さ 0 → natural)。
+    // Phase 1: expand the Revealer (height 0 -> natural).
     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
       if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
       revealer.set_reveal_child(true)
-      // Phase 2: Revealer の展開が終わってから CSS slide-in を始動。
+      // Phase 2: start the CSS slide-in after the Revealer finishes expanding.
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
         if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
         const c = revealer.get_child()
@@ -1212,19 +1212,19 @@ function notificationsSubmenu(): Gtk.Widget {
     const token = bumpToken(id)
     const child = revealer.get_child()
     if (child) {
-      // entering 中なら入場をキャンセルして leaving に切替え。CSS の transition
-      // が translateX(0) ←→ translateX(48) の間で走る。
+      // If mid-entering, cancel the entrance and switch to leaving. The CSS transition
+      // runs between translateX(0) <-> translateX(48).
       child.remove_css_class("entering")
       child.add_css_class("leaving")
     }
-    // Phase 1: CSS slide-out 完了を待つ。
+    // Phase 1: wait for the CSS slide-out to finish.
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
       if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
-      // Phase 2: Revealer 折りたたみ (natural → 0)。周りの行が上にスライドする。
+      // Phase 2: collapse the Revealer (natural -> 0). Surrounding rows slide up.
       revealer.set_reveal_child(false)
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, NOTIF_ANIM_MS + 20, () => {
         if (!tokenValid(id, token)) return GLib.SOURCE_REMOVE
-        // Phase 3: DOM から削除 + reactive scope を dispose。
+        // Phase 3: remove from the DOM + dispose the reactive scope.
         try {
           list.remove(revealer)
         } catch {
@@ -1246,7 +1246,7 @@ function notificationsSubmenu(): Gtk.Widget {
     const items = notifList()
     const itemIds = new Set(items.map((n) => n.id))
 
-    // 1. 消えた通知に leave アニメを当てる
+    // 1. Apply the leave animation to removed notifications
     for (const [id, revealer] of [...revealerById]) {
       if (!itemIds.has(id)) {
         startLeave(id, revealer)
@@ -1254,7 +1254,7 @@ function notificationsSubmenu(): Gtk.Widget {
       }
     }
 
-    // 2. 空状態の表示切替
+    // 2. Toggle the empty-state display
     if (items.length === 0) {
       if (!emptyLabel) {
         emptyLabel = createEmptyLabel()
@@ -1269,7 +1269,7 @@ function notificationsSubmenu(): Gtk.Widget {
       emptyLabel = null
     }
 
-    // 3. 新規通知を items 順に挿入 (既存はそのまま位置を保つ)
+    // 3. Insert new notifications in items order (existing ones keep their position)
     let prev: Gtk.Revealer | null = null
     for (const n of items) {
       const existing = revealerById.get(n.id)
@@ -1277,8 +1277,8 @@ function notificationsSubmenu(): Gtk.Widget {
         prev = existing
         continue
       }
-      // 各 row 専用の reactive scope。JSX 内部の onCleanup はここに紐づく。
-      // scope は startLeave の Phase 3 (DOM 削除) で dispose する。
+      // A reactive scope per row. onCleanup inside the JSX binds here.
+      // The scope is disposed in startLeave's Phase 3 (DOM removal).
       let revealer!: Gtk.Revealer
       createRoot((dispose) => {
         revealer = createRevealerForNotif(n)
@@ -1297,7 +1297,7 @@ function notificationsSubmenu(): Gtk.Widget {
 
   reconcile()
   onCleanup(notifList.subscribe(reconcile))
-  // submenu 自体が捨てられたら、まだ leave アニメ中で残っている scope も解放。
+  // When the submenu itself is dropped, also free scopes still lingering mid-leave-animation.
   onCleanup(() => {
     for (const d of disposeById.values()) {
       try { d() } catch { /* ignore */ }
@@ -1316,13 +1316,13 @@ function notificationsSubmenu(): Gtk.Widget {
 const NOTIF_ICON_SIZE = 40
 
 /**
- * 与えられたファイルパスを 40x40 にスケールして Gtk.Image に読み込ませる。
- * 成功したら true を返す。失敗(ファイル非存在 / 非画像 / 不正パス) なら false。
+ * Scale the given file path to 40x40 and load it into a Gtk.Image.
+ * Return true on success. Return false on failure (missing file / non-image / invalid path).
  */
 function tryLoadFileAsImage(img: Gtk.Image, path: string): boolean {
   try {
     if (!path) return false
-    // 念のため事前に存在チェック (失敗時に GError ダンプが ags 側で煩い)
+    // Pre-check existence just in case (a GError dump on failure is noisy on the ags side)
     const file = Gio.File.new_for_path(path)
     if (!file.query_exists(null)) return false
     const scale = img.get_scale_factor() || 1
@@ -1342,8 +1342,8 @@ function tryLoadFileAsImage(img: Gtk.Image, path: string): boolean {
 }
 
 /**
- * 与えられたアイコン名が現在の theme で見つかるかを確認してから set する。
- * 見つからない場合は false で返してフォールバックに進ませる。
+ * Confirm the given icon name exists in the current theme before setting it.
+ * Return false when not found so the caller proceeds to the fallback.
  */
 function tryLoadIconName(img: Gtk.Image, iconName: string): boolean {
   try {
@@ -1381,29 +1381,29 @@ function buildNotifIcon(
     }
   })()
 
-  // フォールバック チェイン:
+  // Fallback chain:
   //   1. n.image as file path
-  //   2. n.image as icon name (theme 内に存在するときだけ)
+  //   2. n.image as icon name (only when it exists in the theme)
   //   3. n.appIcon as file path
-  //   4. n.appIcon as icon name (theme 内に存在するときだけ)
-  // 全部失敗したら透明 spacer。GTK の generic broken icon は出さない。
+  //   4. n.appIcon as icon name (only when it exists in the theme)
+  // If all fail, a transparent spacer. Don't show GTK's generic broken icon.
 
   const candidates: string[] = []
   if (image) candidates.push(image)
   if (appIcon && appIcon !== image) candidates.push(appIcon)
 
   for (const c of candidates) {
-    // http(s) URL は読み込まない(同期 fetch しないため)
+    // Don't load http(s) URLs (we don't fetch synchronously)
     if (/^https?:\/\//i.test(c)) continue
 
-    // file:// または絶対パス: file として読む
+    // file:// or an absolute path: read as a file
     if (c.startsWith("file://") || c.startsWith("/")) {
       const path = c.startsWith("file://") ? c.replace(/^file:\/\//, "") : c
       if (tryLoadFileAsImage(img, path)) return img
       continue
     }
 
-    // それ以外 (e.g. "kitty", "firefox") は theme の icon name として解決
+    // Otherwise (e.g. "kitty", "firefox") resolve as a theme icon name
     if (tryLoadIconName(img, c)) return img
   }
 
@@ -1427,7 +1427,7 @@ export function notificationRow(
     return `${Math.floor(seconds / 86400)}d`
   })()
 
-  // 通知アクション。"default" は body click に割り当てるためボタンには出さない。
+  // Notification actions. "default" is assigned to body click, so it is not shown as a button.
   const visibleActions = (() => {
     try {
       return n.actions.filter((a) => a.id !== "default")
@@ -1449,7 +1449,7 @@ export function notificationRow(
     } catch (err) {
       console.error("[notif] invoke failed:", err)
     }
-    // freedesktop spec: アクション後は基本 dismiss する(resident hint 未対応)。
+    // freedesktop spec: dismiss after an action by default (resident hint not supported).
     try {
       n.dismiss()
     } catch {
@@ -1457,8 +1457,8 @@ export function notificationRow(
     }
   }
 
-  // 行全体クリックで default action を発火する gesture で、close / action button
-  // 上のクリックは除外するために、子 button への参照をここで集める。
+  // A gesture that fires the default action on a whole-row click; clicks on the close /
+  // action buttons are excluded, so collect references to the child buttons here.
   const innerButtons: Gtk.Widget[] = []
   const actionsRow =
     visibleActions.length > 0 ? (
@@ -1541,9 +1541,9 @@ export function notificationRow(
     </box>
   ) as Gtk.Box
 
-  // body クリック (= 行全体クリック) で default action を発火。
-  // "pressed" は子 button が claim する前に発火してしまうので、pick で
-  // 実クリック対象を取り出し、close / action button 配下なら何もしない。
+  // Fire the default action on a body click (= whole-row click).
+  // "pressed" fires before the child button can claim it, so use pick to
+  // get the real click target, and do nothing if it's under the close / action button.
   if (hasDefaultAction) {
     const gesture = Gtk.GestureClick.new()
     gesture.set_button(Gdk.BUTTON_PRIMARY)
@@ -1565,7 +1565,7 @@ export function notificationRow(
 }
 
 // =============================================================================
-// 中段: Volume + Brightness
+// Middle: Volume + Brightness
 // =============================================================================
 function SlidersIsland(): Gtk.Widget {
   return (
@@ -1622,9 +1622,9 @@ function sliderRow(
     lock = false
   })
 
-  // 0..1 の値を "  0" / " 50" / "100" の 3 桁右寄せ表記に。等幅フォントと
-  // 組み合わせることで、値が変わってもラベル幅が揺れずスライダー位置が
-  // 動かない。
+  // Format a 0..1 value as a 3-digit right-aligned "  0" / " 50" / "100". Combined with a
+  // monospace font, the label width stays stable as the value changes so the slider position
+  // doesn't move.
   const valueLabel = value((v) => {
     const n = Math.round(Math.max(0, Math.min(1, v)) * 100)
     return n.toString().padStart(3, " ")
@@ -1642,10 +1642,10 @@ function sliderRow(
 }
 
 // =============================================================================
-// 下段: メディアプレーヤー
+// Bottom: media player
 // =============================================================================
 function MediaIsland(): Gtk.Widget {
-  // 各表示要素は notify ベースの reactive state から読む。
+  // Each display element reads from notify-based reactive state.
   // (mediaTitle / mediaArtist / mediaArtUrl / mediaPlaybackStatus / mediaLength)
   const titleLabel = createComputed(() => {
     const t = mediaTitle()
@@ -1663,7 +1663,7 @@ function MediaIsland(): Gtk.Widget {
     return null
   })
 
-  // position は notify が来ない player が多いので 1Hz tick で polling。
+  // Many players don't emit notify for position, so poll with a 1Hz tick.
   const [tick, setTick] = createState(0)
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
     setTick(tick() + 1)
@@ -1687,17 +1687,17 @@ function MediaIsland(): Gtk.Widget {
   })
 
   // art image。
-  // 注意: Gtk.Picture は paintable の intrinsic size が widget の natural size
-  // に直接効くため、大きい画像で MediaIsland が膨らみメニュー全体が押し上げ
-  // られる。Gtk.Image は pixel_size をセットすると paintable のサイズに関わらず
-  // natural=pixel_size に固定されるので、こちらで描画する。
+  // Note: with Gtk.Picture the paintable's intrinsic size directly drives the widget's natural
+  // size, so a large image inflates MediaIsland and pushes the whole menu up.
+  // Gtk.Image, with pixel_size set, fixes natural=pixel_size regardless of the paintable size,
+  // so draw with that instead.
   const ART_SIZE_PX = 72
   const artImage = (
     <image cssName="MediaArt" pixelSize={ART_SIZE_PX} />
   ) as Gtk.Image
 
-  // art が無い / 読み込み失敗時のフォールバック画像。空欄にすると枠だけ黒く
-  // 残ってレイアウトが崩れて見えるので、アセットの music アイコンを置く。
+  // Fallback image when art is missing / fails to load. Leaving it blank leaves a black
+  // frame that looks broken, so place the asset's music icon.
   function applyFallback() {
     artImage.set_from_file(`${SRC}/assets/music.svg`)
   }
@@ -1713,8 +1713,8 @@ function MediaIsland(): Gtk.Widget {
       return
     }
     try {
-      // pixel_size 固定でも、大きい元画像をそのまま読むのは無駄なので
-      // ロード段階でも 144x144 (HiDPI 2x) 程度に縮めておく。
+      // Even with a fixed pixel_size, reading the large original as-is is wasteful, so
+      // shrink it to about 144x144 (HiDPI 2x) at load time too.
       const scale = artImage.get_scale_factor() || 1
       const target = ART_SIZE_PX * scale * 2
       const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
@@ -1736,9 +1736,9 @@ function MediaIsland(): Gtk.Widget {
   applyArt(artFile())
   artFile.subscribe(() => applyArt(artFile()))
 
-  // シーク可能な Gtk.Scale。change-value はユーザー操作 (drag / scroll /
-  // キー入力) のときだけ発火する。プログラム的に set_value したときは
-  // 発火しないので、再生位置のポーリング更新と入力イベントが安全に分離できる。
+  // A seekable Gtk.Scale. change-value fires only on user interaction (drag / scroll /
+  // key input). It doesn't fire when set_value is called programmatically,
+  // so position-polling updates and input events are cleanly separated.
   const seekScale = new Gtk.Scale({
     orientation: Gtk.Orientation.HORIZONTAL,
     hexpand: true,
@@ -1749,8 +1749,8 @@ function MediaIsland(): Gtk.Widget {
   seekScale.add_css_class("MediaProgress")
   seekScale.set_value(progress())
 
-  // 操作中フラグ。ユーザーが drag している間は poll での set_value を
-  // skip して上書きを防ぐ。最後の操作から 1.5 秒経ったら解除。
+  // Interacting flag. While the user is dragging, skip set_value from polling
+  // to avoid overwriting. Clear it 1.5s after the last interaction.
   let userSeeking = false
   let userSeekingTimeoutId: number | null = null
   function markUserSeeking() {

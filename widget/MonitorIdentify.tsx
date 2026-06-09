@@ -3,13 +3,13 @@ import { createState } from "gnim"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 
-// 全モニタ共有の「識別中」フラグ。各モニタの MonitorIdentifyLayer がこれを購読する。
+// Shared "identifying" flag across all monitors. Each monitor's MonitorIdentifyLayer subscribes to it.
 const [identifying, setIdentifying] = createState(false)
 export { identifying }
 
 let identifyTimer: number | null = null
 
-// 各モニタの中央にコネクタ名を一定時間(既定 3 秒)デカデカ表示する。
+// Show the connector name large in the center of each monitor for a duration (default 3s).
 export function identifyMonitors(durationMs = 3000) {
   setIdentifying(true)
   if (identifyTimer !== null) {
@@ -22,8 +22,8 @@ export function identifyMonitors(durationMs = 3000) {
   })
 }
 
-// モニタ中央に表示する識別用オーバーレイ。アンカー無し = layer-shell が中央寄せする。
-// visible を identifying にバインドし、識別中だけ surface を mount する。
+// Identify overlay shown centered on the monitor. No anchor = layer-shell centers the surface.
+// Bind visible to identifying so the surface is only mounted while identifying.
 export function MonitorIdentifyLayer({
   gdkmonitor,
 }: {

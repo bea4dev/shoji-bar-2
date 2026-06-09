@@ -1,25 +1,25 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
-// ShojiWM の TS 構成ランタイム(Node)が立てる Unix ソケットに接続するクライアント。
-// 行区切り JSON:
-//   送信: {"method": string, "params"?: unknown}（コマンド / fire-and-forget）
-//        {"id": number, "method": ..., "params": ...}（応答が欲しいリクエスト）
-//   受信: {"event": string, "payload": unknown}（broadcast）
-//        {"id": number, "result"|"error": ...}（リクエストへの応答）
+// Client that connects to the Unix socket opened by ShojiWM's TS config runtime (Node).
+// Newline-delimited JSON:
+//   send: {"method": string, "params"?: unknown} (command / fire-and-forget)
+//        {"id": number, "method": ..., "params": ...} (request expecting a response)
+//   recv: {"event": string, "payload": unknown} (broadcast)
+//        {"id": number, "result"|"error": ...} (response to a request)
 //
-// 構成のホットリロードでソケットは作り直されるため、切断時は自動再接続する。
+// The socket is recreated on config hot-reload, so reconnect automatically on disconnect.
 
 export type ShojiIpcMessage =
   | { event: string; payload: unknown }
   | { id: number; result?: unknown; error?: string }
 
 export interface ShojiIpcClient {
-  /** コマンド送信(応答不要) */
+  /** Send a command (no response expected) */
   send(method: string, params?: unknown): void
-  /** id 付きリクエスト送信。応答は onMessage に {id, result} として届く */
+  /** Send a request with an id. The response arrives at onMessage as {id, result} */
   request(method: string, params?: unknown): void
-  /** 切断して再接続を停止 */
+  /** Disconnect and stop reconnecting */
   close(): void
 }
 
@@ -30,9 +30,9 @@ export function shojiSocketPath(): string {
 }
 
 export interface ShojiIpcOptions {
-  /** 接続確立直後に毎回送るリクエスト(初期状態の取得など) */
+  /** Sent right after each connection is established (e.g. to fetch the initial state) */
   onConnect?: (client: ShojiIpcClient) => void
-  /** 再接続までの待ち時間(ms) */
+  /** Delay before reconnecting (ms) */
   reconnectMs?: number
 }
 
@@ -98,7 +98,7 @@ export function connectShojiIpc(
       }
 
       if (line === null) {
-        // EOF: サーバが切断した
+        // EOF: the server disconnected
         handleDisconnect()
         return
       }
@@ -108,7 +108,7 @@ export function connectShojiIpc(
         try {
           onMessage(JSON.parse(trimmed) as ShojiIpcMessage)
         } catch {
-          // 壊れた行は無視
+          // Ignore malformed lines
         }
       }
 

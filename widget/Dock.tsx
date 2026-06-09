@@ -23,8 +23,8 @@ const DOCK_CLOSE_GRACE_MS = 250
 const DOCK_ANIMATION_MS = 320
 
 // =============================================================================
-// DockWindow: モニタごとに常駐(レイヤ自体は常に存在し、visible で mount/unmount)。
-// IPC の dock.proximity broadcast に従って表示・非表示を切り替える。
+// DockWindow: one per monitor (the layer always exists; mount/unmount via visible).
+// Show/hide according to the IPC dock.proximity broadcast.
 // =============================================================================
 export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const connector = gdkmonitor.get_connector()
@@ -33,8 +33,8 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   const [mounted, setMounted] = createState(false)
   const [isOpen, setIsOpen] = createState(false)
 
-  // popover が開いている間は proximity が外れても dock を閉じない。
-  // popovers 配列から popup 中のものを判定する代わりに、明示的に open 数を持つ。
+  // While a popover is open, don't close the dock even if proximity is lost.
+  // Instead of inspecting the popovers array, keep an explicit open count.
   let popoverOpenCount = 0
   const [popoverHeld, setPopoverHeld] = createState(false)
 
@@ -51,8 +51,8 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   let closeTimeoutId: number | null = null
   let unmountTimeoutId: number | null = null
 
-  // 現在の DockItem 群が持つ popover。Dock を閉じる際に一緒に popdown しないと、
-  // フェードアウト後に popover が画面端に残骸のように残ってしまう。
+  // Popovers held by the current DockItems. If not popped down when the dock closes,
+  // the popover lingers like a remnant at the screen edge after fade-out.
   const popovers: Gtk.Popover[] = []
 
   function closePopovers() {
@@ -103,9 +103,9 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
     )
   }
 
-  // dock を出したい状態 = (proximity inside) OR (popover が 1 つ以上開いている)。
-  // どちらか保っている間は閉じず、両方外れて grace 経過したら hide。
-  // createComputed は tracking context 外だと動かないので、依存 signal を直接購読する。
+  // Want-dock-shown = (proximity inside) OR (one or more popovers open).
+  // Stay open while either holds; hide once both clear and the grace period passes.
+  // createComputed doesn't work outside a tracking context, so subscribe to the deps directly.
   function wantOpen(): boolean {
     const inside = connector ? !!dockProximity()[connector] : false
     return inside || popoverHeld()
@@ -144,7 +144,7 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
   dockProximity.subscribe(react)
   popoverHeld.subscribe(react)
 
-  // モニタの dock items を reactive に導出
+  // Derive the monitor's dock items reactively
   const monitorAccessor = createComputed(() =>
     monitorByConnector(view(), connector),
   )
@@ -174,9 +174,9 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
         orientation={Gtk.Orientation.HORIZONTAL}
         spacing={4}
         $={(self) => {
-            // DockItem ボタンを reactive に詰める。
-            // gnim の jsx は subscribe コールバック中だと tracking context が無いので、
-            // createRoot でラップして毎回スコープを作り直す(Wallpaper と同じパターン)。
+            // Fill in the DockItem buttons reactively.
+            // gnim's jsx has no tracking context inside a subscribe callback, so
+            // wrap in createRoot and rebuild the scope each time (same pattern as Wallpaper).
             let dispose: (() => void) | null = null
 
             const rebuild = () => {
@@ -184,7 +184,7 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
                 dispose()
                 dispose = null
               }
-              // 旧 popover を閉じてから作り直す(残骸防止)
+              // Pop down old popovers before rebuilding (prevents remnants)
               closePopovers()
               popovers.length = 0
               let child = self.get_first_child()
@@ -218,11 +218,11 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
 }
 
 // =============================================================================
-// 1 つの DockItem (= 1 アプリ) を描画する。
-// 左クリック: activateOrLaunch(MRU 先頭 focus または launch)
-// 右クリック: Popover(ウィンドウ一覧 + ピン留め + New Window)
-// インジケータ: ウィンドウ数 (max 3 ドット、4 以上は最後に "+")
-// focused クラスでアクセント枠を当てる
+// Render one DockItem (= one app).
+// Left click: activateOrLaunch (focus the MRU-front window, or launch)
+// Right click: popover (window list + pin + New Window)
+// Indicator: window count (max 3 dots; 4+ shows a trailing "+")
+// Apply an accent border via the focused class
 // =============================================================================
 function buildDockItem(
   item: DockItem,
@@ -235,7 +235,7 @@ function buildDockItem(
   popover.set_position(Gtk.PositionType.TOP)
   popovers.push(popover)
 
-  // popdown / 外側クリック / ESC のいずれで閉じても発火する。
+  // Fires whether closed via popdown / outside click / ESC.
   popover.connect("closed", () => onPopoverClosed())
 
   const popoverContent = buildPopoverContent(item, () => popover.popdown())
@@ -253,7 +253,7 @@ function buildDockItem(
       onClicked={() => activateOrLaunch(item)}
       $={(self) => {
         popover.set_parent(self)
-        // 右クリックで Popover を出す
+        // Right click opens the popover
         const rightClick = Gtk.GestureClick.new()
         rightClick.set_button(Gdk.BUTTON_SECONDARY)
         rightClick.connect("pressed", () => {
@@ -279,7 +279,7 @@ function buildDockItem(
 }
 
 function buildIndicator(item: DockItem): Gtk.Widget {
-  // ウィンドウが無いピン留めは空のスペーサーで高さだけ揃える(レイアウトジャンプ防止)
+  // For pinned apps with no windows, use an empty spacer to keep the height (prevents layout jump)
   const count = item.windows.length
   const dots: Gtk.Widget[] = []
   const dotCount = Math.min(count, 3)
@@ -348,7 +348,7 @@ function buildPopoverContent(
     )
   }
 
-  // ピン留め切替(.desktop entry が解決できるときだけ)
+  // Toggle pinning (only when the .desktop entry resolves)
   const entry = item.app?.entry
   if (entry) {
     const pinned = isPinned(entry)
@@ -368,7 +368,7 @@ function buildPopoverContent(
           <label
             cssName="DockPopoverRowLabel"
             halign={Gtk.Align.START}
-            label={pinned ? "Dock から外す" : "Dock にピン留め"}
+            label={pinned ? "Unpin from Dock" : "Pin to Dock"}
           />
         </button>
       ) as Gtk.Widget,
@@ -388,7 +388,7 @@ function buildPopoverContent(
           <label
             cssName="DockPopoverRowLabel"
             halign={Gtk.Align.START}
-            label="新しいウィンドウ"
+            label="New window"
           />
         </button>
       ) as Gtk.Widget,
