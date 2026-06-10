@@ -1306,3 +1306,113 @@ export function formatBatteryDuration(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
 }
+
+// =============================================================================
+// CPU / memory usage. Polled from /proc every 2s (no Astal service exists for
+// these). CPU usage is the busy/total jiffy delta between two samples; memory
+// usage is (MemTotal - MemAvailable) / MemTotal.
+// =============================================================================
+
+const SYSTEM_POLL_MS = 2000
+
+const [cpuUsageState, setCpuUsageState] = createState(0) // 0..1
+const [memUsageState, setMemUsageState] = createState(0) // 0..1
+export const cpuUsage = cpuUsageState
+export const memUsage = memUsageState
+
+// Detail values surfaced in the popovers.
+const [cpuCoreCountState, setCpuCoreCountState] = createState(0)
+const [loadAverageState, setLoadAverageState] = createState<
+  [number, number, number]
+>([0, 0, 0])
+const [memTotalKbState, setMemTotalKbState] = createState(0)
+const [memAvailableKbState, setMemAvailableKbState] = createState(0)
+const [swapTotalKbState, setSwapTotalKbState] = createState(0)
+const [swapFreeKbState, setSwapFreeKbState] = createState(0)
+export const cpuCoreCount = cpuCoreCountState
+export const loadAverage = loadAverageState
+export const memTotalKb = memTotalKbState
+export const memAvailableKb = memAvailableKbState
+export const swapTotalKb = swapTotalKbState
+export const swapFreeKb = swapFreeKbState
+
+let lastCpuTotal = 0
+let lastCpuIdle = 0
+
+function readProcFile(path: string): string | null {
+  try {
+    const [ok, bytes] = GLib.file_get_contents(path)
+    if (!ok || !bytes) return null
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function pollCpuUsage(): void {
+  const stat = readProcFile("/proc/stat")
+  if (!stat) return
+  // First line: "cpu  user nice system idle iowait irq softirq steal ..."
+  const firstLine = stat.split("\n", 1)[0]
+  const fields = firstLine.trim().split(/\s+/).slice(1).map(Number)
+  if (fields.length < 5) return
+  const idle = (fields[3] ?? 0) + (fields[4] ?? 0) // idle + iowait
+  const total = fields.reduce((sum, v) => sum + (isFinite(v) ? v : 0), 0)
+  const deltaTotal = total - lastCpuTotal
+  const deltaIdle = idle - lastCpuIdle
+  lastCpuTotal = total
+  lastCpuIdle = idle
+  if (deltaTotal > 0) {
+    setCpuUsageState(
+      Math.max(0, Math.min(1, (deltaTotal - deltaIdle) / deltaTotal)),
+    )
+  }
+}
+
+function pollLoadAndCores(): void {
+  if (cpuCoreCountState() === 0) {
+    setCpuCoreCountState(GLib.get_num_processors())
+  }
+  const loadavg = readProcFile("/proc/loadavg")
+  if (loadavg) {
+    const p = loadavg.trim().split(/\s+/)
+    setLoadAverageState([Number(p[0]) || 0, Number(p[1]) || 0, Number(p[2]) || 0])
+  }
+}
+
+function pollMemory(): void {
+  const meminfo = readProcFile("/proc/meminfo")
+  if (!meminfo) return
+  const values = new Map<string, number>()
+  for (const line of meminfo.split("\n")) {
+    const match = line.match(/^(\w+):\s+(\d+)/)
+    if (match) values.set(match[1], Number(match[2]))
+  }
+  const total = values.get("MemTotal") ?? 0
+  const available = values.get("MemAvailable") ?? 0
+  setMemTotalKbState(total)
+  setMemAvailableKbState(available)
+  setSwapTotalKbState(values.get("SwapTotal") ?? 0)
+  setSwapFreeKbState(values.get("SwapFree") ?? 0)
+  if (total > 0) {
+    setMemUsageState(Math.max(0, Math.min(1, (total - available) / total)))
+  }
+}
+
+function pollSystemUsage(): void {
+  pollCpuUsage()
+  pollLoadAndCores()
+  pollMemory()
+}
+
+pollSystemUsage()
+GLib.timeout_add(GLib.PRIORITY_DEFAULT, SYSTEM_POLL_MS, () => {
+  pollSystemUsage()
+  return GLib.SOURCE_CONTINUE
+})
+
+/** Format a /proc kB value as GiB, e.g. 16261912 -> "15.5 GiB". */
+export function formatKbAsGiB(kb: number): string {
+  if (!isFinite(kb) || kb <= 0) return "—"
+  return `${(kb / 1024 / 1024).toFixed(1)} GiB`
+}

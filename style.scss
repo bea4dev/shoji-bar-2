@@ -351,6 +351,60 @@ window.Bar {
       color: $bg-color;
     }
   }
+
+  // CPU / memory indicators. Same look as the battery button; shared by both.
+  UsageButton {
+    border-radius: 8px;
+    min-height: 26px;
+    padding: 0 8px;
+    background: transparent;
+    margin-right: 2px;
+
+    UsageRow {
+      UsageIcon {
+        -gtk-icon-size: 14px;
+      }
+
+      UsagePercent {
+        color: $text-active-color;
+        font-family: monospace;
+        font-size: 12px;
+        font-feature-settings: "tnum";
+      }
+    }
+  }
+
+  UsageButton > * {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+    outline: none;
+  }
+
+  UsageButton:focus,
+  UsageButton:focus-visible,
+  UsageButton:focus-within,
+  UsageButton > *:focus,
+  UsageButton > *:focus-visible,
+  UsageButton > *:focus-within {
+    outline: none;
+    box-shadow: none;
+    border: none;
+  }
+
+  UsageButton:hover {
+    background: #2a2a2a;
+  }
+
+  UsageButton.pressed {
+    background: $accent-color;
+
+    UsageRow UsagePercent {
+      color: $bg-color;
+    }
+  }
 }
 
 window.WallpaperBackground {
@@ -1940,6 +1994,64 @@ BatteryPopover {
     }
 
     BatteryDetailValue {
+      color: $text-active-color;
+      font-size: 12px;
+      font-feature-settings: "tnum";
+    }
+  }
+}
+
+// =============================================================================
+// CPU / memory popover (same look as the battery popover, shared by both).
+// =============================================================================
+UsagePopover {
+  background: transparent;
+
+  contents {
+    background: $bg-color;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0;
+  }
+
+  UsagePopoverBox {
+    padding: 12px 14px;
+    min-width: 240px;
+  }
+
+  UsagePopoverHeader {
+    UsagePopoverIcon {
+      -gtk-icon-size: 28px;
+      color: $text-active-color;
+    }
+
+    UsagePopoverPercent {
+      color: $text-active-color;
+      font-size: 18px;
+      font-weight: bold;
+      font-feature-settings: "tnum";
+    }
+
+    UsagePopoverState {
+      color: $text-inactive-color;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+  }
+
+  UsagePopoverSep {
+    min-height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 4px 0;
+  }
+
+  UsageDetailRow {
+    UsageDetailLabel {
+      color: $text-inactive-color;
+      font-size: 12px;
+    }
+
+    UsageDetailValue {
       color: $text-active-color;
       font-size: 12px;
       font-feature-settings: "tnum";
