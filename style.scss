@@ -352,7 +352,7 @@ window.Bar {
     background: $accent-color;
 
     BatteryRow BatteryPercent {
-      color: $bg-color;
+      color: $text-active-black-color;
     }
   }
 
@@ -406,7 +406,7 @@ window.Bar {
     background: $accent-color;
 
     UsageRow UsagePercent {
-      color: $bg-color;
+      color: $text-active-black-color;
     }
   }
 }
@@ -717,12 +717,12 @@ popover.SystemTrayPopover {
   background: transparent;
 
   > arrow {
-    background: $bg-up-color;
+    background: $bg-color;
     border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   > contents {
-    background: $bg-up-color;
+    background: $bg-color;
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.06);
     padding: 4px;
@@ -745,7 +745,7 @@ popover.SystemTrayPopover {
     color: $bg-color;
 
     label {
-      color: $bg-color;
+      color: $text-active-black-color;
     }
   }
 
@@ -931,7 +931,7 @@ window.StartMenuLayer {
         background: $accent-color;
 
         AppButtonInner AppButtonLabel {
-          color: $bg-color;
+          color: $text-active-black-color;
         }
       }
 
