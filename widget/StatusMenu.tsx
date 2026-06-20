@@ -532,10 +532,17 @@ function wifiSubmenu(): Gtk.Widget {
             }
           })
         }
+        // Only the list view reflects live AP / SSID data, so let those polled
+        // updates rebuild *only* while the list is showing. Otherwise a poll
+        // every ~1.5–3s would tear down and recreate the password form mid-typing
+        // (resetting the PasswordEntry). View switches always rebuild.
+        const rebuildIfList = () => {
+          if (wifiView().kind === "list") rebuild()
+        }
         rebuild()
         onCleanup(wifiView.subscribe(rebuild))
-        onCleanup(wifiAccessPoints.subscribe(rebuild))
-        onCleanup(wifiSsid.subscribe(rebuild))
+        onCleanup(wifiAccessPoints.subscribe(rebuildIfList))
+        onCleanup(wifiSsid.subscribe(rebuildIfList))
       }}
     />
   ) as Gtk.Widget
