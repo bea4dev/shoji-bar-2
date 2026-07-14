@@ -8,6 +8,7 @@ import {
   onCleanup,
 } from "gnim"
 import { LayerState } from "../utils/LayerState"
+import { OS_ICON_BLACK, OS_ICON_WHITE } from "../utils/osIcon"
 import { isPointInsideWidget } from "../utils/pointInside"
 import app from "ags/gtk4/app"
 import { execAsync } from "ags/process"
@@ -61,11 +62,7 @@ export function StartMenuButton({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       <image
         cssName="StartMenuIcon"
         file={LAYER_STATE.then(gdkmonitor, (state) =>
-          state.isOpen((open) =>
-            open
-              ? `${SRC}/assets/arch-linux-black.svg`
-              : `${SRC}/assets/arch-linux-white.svg`,
-          ),
+          state.isOpen((open) => (open ? OS_ICON_BLACK : OS_ICON_WHITE)),
         )}
         pixelSize={16}
       />
