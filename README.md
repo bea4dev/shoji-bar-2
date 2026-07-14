@@ -27,36 +27,49 @@ compositor that supports the layer-shell protocol.
 
 ## Dependencies
 
-> **In practice, installing AGS pulls in almost everything below.** The AGS
-> package depends on GTK 4, `gtk4-layer-shell`, and the Astal libraries, so once
-> `ags` is installed the GTK/Astal side generally just works. You typically only
-> need to install the **command-line tools** and the **backing system services**
-> separately.
+> [!IMPORTANT]
+> **The Astal libraries are NOT dependencies of AGS — you must install them
+> separately.** Installing the `ags` CLI only brings in GTK 4, `gtk4-layer-shell`
+> and the Astal core (`astal-io` / `astal4`); each `gi://Astal*` module used by a
+> widget (`AstalApps`, `AstalBattery`, …) is its own package that ships its own
+> GObject-introspection typelib. If they are missing you get a runtime error like
+> `Requiring AstalApps … Typelib file for namespace 'AstalApps' … not found`.
+>
+> On Arch/AUR the easiest fix is the meta package that pulls all of them:
+> ```sh
+> paru -S libastal-meta        # or: yay -S libastal-meta
+> ```
+> or install just the ones this shell uses (see the table below).
+>
+> Note: `ags types` succeeding is **not** proof the libraries are installed — it
+> only generates TypeScript stubs for the typelibs that are *already present* and
+> installs nothing. And `ags run` strips the types, so a missing library only
+> surfaces at runtime.
 
 ### Core
 
 - [AGS](https://aylur.github.io/ags/) ≥ 3 (the `ags` CLI; provides the `gnim`
-  runtime and the GTK4 bindings). Installing this normally brings in GTK 4,
-  `gtk4-layer-shell`, and the Astal libraries as dependencies.
+  runtime, the GTK4 bindings, and usually GTK 4 + `gtk4-layer-shell` + the Astal
+  core as dependencies)
 - GTK 4
 - `gtk4-layer-shell`
 
 ### Astal libraries
 
-These back individual widgets (imported as `gi://Astal*`) and usually arrive
-together with AGS — you rarely need to install them by hand. All are used by the
-default layout:
+These back individual widgets (imported as `gi://Astal*`). Each is a separate
+package — install them alongside AGS (Arch/AUR package names shown). All are used
+by the default layout:
 
-| Library            | Used for                          | Backing service          |
-| ------------------ | --------------------------------- | ------------------------ |
-| `AstalApps`        | application launcher / dock        | `.desktop` files         |
-| `AstalBattery`     | battery indicator                 | UPower                   |
-| `AstalNetwork`     | Wi-Fi status                      | NetworkManager           |
-| `AstalNotifd`      | notifications                     | (built-in daemon)        |
-| `AstalMpris`       | media controls                    | any MPRIS player         |
-| `AstalWp`          | volume control                    | WirePlumber / PipeWire   |
-| `AstalPowerProfiles` | power-profile toggle            | power-profiles-daemon    |
-| `AstalTray`        | system tray                       | StatusNotifierItem hosts |
+| Library              | Arch/AUR package          | Used for                   | Backing service          |
+| -------------------- | ------------------------- | -------------------------- | ------------------------ |
+| `AstalApps`          | `libastal-apps`           | application launcher / dock | `.desktop` files         |
+| `AstalBattery`       | `libastal-battery`        | battery indicator          | UPower                   |
+| `AstalNetwork`       | `libastal-network`        | Wi-Fi status               | NetworkManager           |
+| `AstalNotifd`        | `libastal-notifd`         | notifications              | (built-in daemon)        |
+| `AstalMpris`         | `libastal-mpris`          | media controls             | any MPRIS player         |
+| `AstalWp`            | `libastal-wireplumber`    | volume control             | WirePlumber / PipeWire   |
+| `AstalPowerProfiles` | `libastal-powerprofiles`  | power-profile toggle       | power-profiles-daemon    |
+| `AstalTray`          | `libastal-tray`           | system tray                | StatusNotifierItem hosts |
 
 ### Command-line tools
 
@@ -80,16 +93,23 @@ default layout:
 The shell is loaded directly from `~/.config/shoji-bar-2`.
 
 ```sh
-# 1. Clone into the config directory
+# 1. Install AGS and the Astal libraries (see Dependencies above).
+#    IMPORTANT: the Astal libraries are NOT pulled in by AGS. On Arch/AUR:
+paru -S aylurs-gtk-shell libastal-meta   # ags + all Astal libs
+#    ...and the command-line tools your widgets need (cliphist, wl-clipboard,
+#    imagemagick, brightnessctl, ...).
+
+# 2. Clone into the config directory
 git clone https://github.com/bea4dev/shoji-bar-2 ~/.config/shoji-bar-2
 cd ~/.config/shoji-bar-2
 
-# 2. Generate the GObject-introspection type stubs (@girs).
-#    Run this after the Astal libraries above are installed; it introspects the
-#    typelibs present on the system. Re-run it whenever you add/upgrade a library.
+# 3. Generate the GObject-introspection type stubs (@girs).
+#    Run this AFTER the Astal libraries are installed — it only introspects the
+#    typelibs already present, and installs nothing. Re-run it whenever you
+#    add/upgrade a library.
 ags types -u -d ./
 
-# 3. (optional) JS tooling for editing / formatting (gnim types, prettier)
+# 4. (optional) JS tooling for editing / formatting (gnim types, prettier)
 npm install
 ```
 
