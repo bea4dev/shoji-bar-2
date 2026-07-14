@@ -1,5 +1,5 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
-import { Accessor, createComputed, createRoot, createState } from "gnim"
+import { Accessor, createComputed, createRoot, createState, onCleanup } from "gnim"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -69,6 +69,7 @@ export function WallpaperBackground({
       exclusivity={Astal.Exclusivity.IGNORE}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
       application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible
     >
       {picture}
@@ -432,7 +433,7 @@ export function WallpaperLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.NORMAL}
       keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={mounted}
     >
       {inner}

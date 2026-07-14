@@ -1,7 +1,8 @@
 import app from "ags/gtk4/app"
+import type { Gdk, Gtk } from "ags/gtk4"
 import style from "./style.scss"
 import Bar from "./widget/Bar"
-import { createBinding, For, This } from "gnim"
+import { createBinding, For } from "gnim"
 import {
   StartMenuLayer,
   controlStartMenu,
@@ -49,24 +50,23 @@ app.start({
   main() {
     const monitors = createBinding(app, "monitors")
 
-    return (
-      <For each={monitors}>
-        {(monitor) => (
-          <This this={app}>
-            <WallpaperBackground gdkmonitor={monitor} />
-            <StartMenuLayer gdkmonitor={monitor} />
-            <ClipboardMenuLayer gdkmonitor={monitor} />
-            <ClockMenuLayer gdkmonitor={monitor} />
-            <WallpaperLayer gdkmonitor={monitor} />
-            <StatusMenuLayer gdkmonitor={monitor} />
-            <NotifPopupLayer gdkmonitor={monitor} />
-            <Bar gdkmonitor={monitor} />
-            <DockWindow gdkmonitor={monitor} />
-            <MonitorIdentifyLayer gdkmonitor={monitor} />
-            <SnapPreviewLayer gdkmonitor={monitor} />
-          </This>
-        )}
-      </For>
+    // Each For must return one window because Gnim does not support nested Fragments. Only the
+    // always-visible windows register with Gtk.Application; GTK 4.22 can crash when unregistering
+    // an initially hidden Wayland window that never acquired a GdkSurface.
+    const mount = (createWindow: (monitor: Gdk.Monitor) => Gtk.Window) => (
+      <For each={monitors}>{createWindow}</For>
     )
+
+    mount((monitor) => <WallpaperBackground gdkmonitor={monitor} />)
+    mount((monitor) => <StartMenuLayer gdkmonitor={monitor} />)
+    mount((monitor) => <ClipboardMenuLayer gdkmonitor={monitor} />)
+    mount((monitor) => <ClockMenuLayer gdkmonitor={monitor} />)
+    mount((monitor) => <WallpaperLayer gdkmonitor={monitor} />)
+    mount((monitor) => <StatusMenuLayer gdkmonitor={monitor} />)
+    mount((monitor) => <NotifPopupLayer gdkmonitor={monitor} />)
+    mount((monitor) => <Bar gdkmonitor={monitor} />)
+    mount((monitor) => <DockWindow gdkmonitor={monitor} />)
+    mount((monitor) => <MonitorIdentifyLayer gdkmonitor={monitor} />)
+    mount((monitor) => <SnapPreviewLayer gdkmonitor={monitor} />)
   },
 })

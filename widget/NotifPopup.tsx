@@ -1,5 +1,4 @@
 import { Astal, Gtk } from "ags/gtk4"
-import app from "ags/gtk4/app"
 import { createRoot, createState, onCleanup } from "gnim"
 import GLib from "gi://GLib"
 import type AstalNotifd from "gi://AstalNotifd"
@@ -198,7 +197,7 @@ export function NotifPopupLayer({
       anchor={TOP | RIGHT}
       marginTop={38}
       marginRight={10}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={windowVisible}
     >
       <box

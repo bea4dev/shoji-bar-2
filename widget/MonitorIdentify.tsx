@@ -1,6 +1,5 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
-import { createState } from "gnim"
-import app from "ags/gtk4/app"
+import { createState, onCleanup } from "gnim"
 import GLib from "gi://GLib"
 
 // Shared "identifying" flag across all monitors. Each monitor's MonitorIdentifyLayer subscribes to it.
@@ -38,7 +37,7 @@ export function MonitorIdentifyLayer({
       gdkmonitor={gdkmonitor}
       layer={Astal.Layer.OVERLAY}
       exclusivity={Astal.Exclusivity.NORMAL}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={identifying}
     >
       <box

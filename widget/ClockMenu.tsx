@@ -1,9 +1,8 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
-import { Accessor, createState } from "gnim"
+import { Accessor, createState, onCleanup } from "gnim"
 import { createPoll } from "ags/time"
 import { LayerState } from "../utils/LayerState"
 import { isPointInsideWidget } from "../utils/pointInside"
-import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 
 type ClockMenuState = {
@@ -209,7 +208,7 @@ export function ClockMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.NORMAL}
       keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={mounted}
     >
       {inner}

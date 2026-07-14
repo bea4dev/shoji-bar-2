@@ -444,7 +444,7 @@ export function StartMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.NORMAL}
       keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={mounted}
     >
       {inner}

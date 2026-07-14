@@ -7,7 +7,6 @@ import {
   onCleanup,
   type Accessor,
 } from "gnim"
-import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { LayerState } from "../utils/LayerState"
@@ -226,7 +225,7 @@ export function StatusMenuLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.NORMAL}
       keymode={Astal.Keymode.ON_DEMAND}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={mounted}
     >
       {inner}

@@ -1,5 +1,6 @@
 import app from "ags/gtk4/app"
 import { Astal, Gdk } from "ags/gtk4"
+import { onCleanup } from "gnim"
 import { StartMenuButton } from "./StartMenu"
 import { ClockButton } from "./ClockMenu"
 import { Workspaces } from "./Workspaces"
@@ -23,6 +24,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       exclusivity={Astal.Exclusivity.EXCLUSIVE}
       anchor={TOP | LEFT | RIGHT}
       application={app}
+      $={(self) => onCleanup(() => self.destroy())}
     >
       <centerbox cssName="parentbox">
         <box $type="start">

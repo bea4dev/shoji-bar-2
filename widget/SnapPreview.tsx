@@ -1,6 +1,5 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
 import { createComputed, createState, onCleanup } from "gnim"
-import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 import Cairo from "gi://cairo"
 import { snapPreview, type SnapPreview } from "../utils/workspaceState"
@@ -127,9 +126,9 @@ export function SnapPreviewLayer({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       // (relative to the true monitor top), so the surface origin must match.
       exclusivity={Astal.Exclusivity.IGNORE}
       anchor={TOP | LEFT | RIGHT | BOTTOM}
-      application={app}
       visible={mounted}
       $={(self) => {
+        onCleanup(() => self.destroy())
         // Make the whole surface click-through so the overlay never steals the
         // drag or a click during the fade-out. The surface size is constant
         // (full monitor), so an empty input region set on map stays valid.

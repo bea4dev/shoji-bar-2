@@ -1,6 +1,5 @@
 import { Astal, Gdk, Gtk } from "ags/gtk4"
-import { createComputed, createRoot, createState } from "gnim"
-import app from "ags/gtk4/app"
+import { createComputed, createRoot, createState, onCleanup } from "gnim"
 import GLib from "gi://GLib"
 import { view, dockProximity } from "../utils/workspaceState"
 import {
@@ -165,7 +164,7 @@ export function DockWindow({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
       // surface itself does not extend below the visible bar — otherwise the
       // bottom 12 px would absorb clicks that should reach the window below.
       marginBottom={12}
-      application={app}
+      $={(self) => onCleanup(() => self.destroy())}
       visible={mounted}
     >
       <box
